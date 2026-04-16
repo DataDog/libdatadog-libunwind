@@ -1,2 +1,4 @@
 Component,Origin,License,Copyright
 libunwind,https://github.com/libunwind/libunwind,MIT,"Various authors (see source file headers)"
+libc,https://github.com/rust-lang/libc,MIT OR Apache-2.0,The Rust Project Developers
+paste,https://github.com/dtolnay/paste,MIT OR Apache-2.0,David Tolnay <dtolnay@gmail.com>

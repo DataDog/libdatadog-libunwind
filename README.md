@@ -8,9 +8,11 @@ against supply chain attacks.
 
 ## Crates
 
-| Crate | Description |
-|---|---|
+
+| Crate                 | Description                            |
+| --------------------- | -------------------------------------- |
 | `libdd-libunwind-sys` | Low-level FFI bindings and build logic |
+
 
 ## Bindings
 
@@ -31,18 +33,17 @@ When adding or updating bindings, edit the appropriate architecture file directl
 
 The build script compiles libunwind from source and requires the following tools on the host:
 
-| Tool | Purpose | Install (Debian/Ubuntu) |
-|---|---|---|
-| `autoconf` | Generates `configure` from `configure.ac` | `apt install autoconf` |
-| `automake` | Generates `Makefile.in` from `Makefile.am` | `apt install automake` |
-| `libtool` | Portable library build support | `apt install libtool` |
-| `make` | Drives the build | `apt install make` |
-| `gcc` or `clang` | C/C++ compiler for libunwind | `apt install gcc` |
+
+| Tool             | Purpose                                    | Install (Debian/Ubuntu) |
+| ---------------- | ------------------------------------------ | ----------------------- |
+| `make`           | Drives the build                           | `apt install make`      |
+| `gcc` or `clang` | C/C++ compiler for libunwind               | `apt install gcc`       |
+
 
 Install all at once:
 
 ```sh
-apt install autoconf automake libtool make gcc
+apt install make gcc
 ```
 
 ### Building
@@ -53,9 +54,11 @@ cargo build
 
 ### Supported targets
 
-| Target | Status |
-|---|---|
-| `x86_64-unknown-linux-gnu` | Supported |
+
+| Target                      | Status    |
+| --------------------------- | --------- |
+| `x86_64-unknown-linux-gnu`  | Supported |
 | `aarch64-unknown-linux-gnu` | Supported |
+
 
 All other targets produce an empty crate (the build script and bindings are gated on `target_os = "linux"`).

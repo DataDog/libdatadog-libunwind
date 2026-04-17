@@ -4,9 +4,9 @@ version = "1.0.0"
 description = "Rust bindings for using unwind library inside libdatadog"
 homepage = "https://github.com/DataDog/libdatadog/tree/main/libdd-libunwind-sys"
 repository = "https://github.com/DataDog/libdatadog/tree/main/libdd-libunwind-sys"
-rust-version.workspace = true
-edition.workspace = true
-license.workspace = true
+rust-version = "1.84.1"
+edition = "2021"
+license= "Apache-2.0"
 links = "unwind"  # Tells Cargo this crate links to libunwind (prevents multiple builds)
 
 [lib]

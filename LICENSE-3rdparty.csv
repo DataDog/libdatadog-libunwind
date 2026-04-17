@@ -1,2 +1,4 @@
 Component,Origin,License,Copyright
-libunwind,https://github.com/libunwind/libunwind,MIT,"Various authors (see source file headers)"
+libunwind,https://github.com/libunwind/libunwind,MIT,"['BEA Systems', 'BlackBerry Limited', 'Blackberry Limited', 'Brock York', 'CERN and Aalto University', 'CodeSourcery', 'David Mosberger-Tang', 'Dmitry Chagin', 'FERMI NATIONAL ACCELERATOR LABORATORY', 'Free Software Foundation, Inc.', 'Garmin International', 'Google, Inc', 'Hewlett-Packard Co', 'Hewlett-Packard Co David Mosberger-Tang', 'Hewlett-Packard Co.', 'Hewlett-Packard Development Company, L.P.', 'IBM', 'Imagination Technologies Limited', 'John D. Polstra', 'Konstantin Belousov', 'Linaro Limited', 'Loongson Technology Corporation Limited', 'Max Asbock', 'QNX Blackberry Limited', 'Red Hat', 'Stephen M.', 'The FreeBSD Foundation', 'Tilera Corp.', 'Tommi Rantala', 'Zhaofeng Li', 'arun.sharma@google.com', 'stefan.demharter@gmx.net']"
+libc,https://github.com/rust-lang/libc,MIT OR Apache-2.0,The Rust Project Developers
+paste,https://github.com/dtolnay/paste,MIT OR Apache-2.0,David Tolnay <dtolnay@gmail.com>

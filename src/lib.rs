@@ -13,6 +13,200 @@ pub use libunwind_aarch64::*;
 pub use libunwind_x86_64::*;
 
 #[cfg(all(test, target_os = "linux"))]
+mod remote_tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    static FORK_MUTEX: Mutex<()> = Mutex::new(());
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn test_upt_create_destroy() {
+        unsafe {
+            let pid = libc::getpid();
+            let upt_info = _UPT_create(pid);
+            assert!(!upt_info.is_null(), "_UPT_create returned null");
+            _UPT_destroy(upt_info);
+        }
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn test_addr_space_create_destroy() {
+        unsafe {
+            let addr_space =
+                unw_create_addr_space(std::ptr::addr_of!(_UPT_accessors) as *mut UnwAccessors, 0);
+            assert!(!addr_space.is_null(), "unw_create_addr_space returned null");
+            unw_destroy_addr_space(addr_space);
+        }
+    }
+
+    /// Fork a child that stops itself with `PTRACE_TRACEME` + `SIGSTOP`.
+    /// The parent waits, unwinds the child's stack, then kills it.
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn test_remote_unwind_child() {
+        let _guard = FORK_MUTEX.lock().unwrap();
+        unsafe {
+            let child_pid = libc::fork();
+            assert!(child_pid >= 0, "fork failed");
+
+            if child_pid == 0 {
+                libc::ptrace(
+                    libc::PTRACE_TRACEME,
+                    0,
+                    std::ptr::null_mut::<libc::c_void>(),
+                    std::ptr::null_mut::<libc::c_void>(),
+                );
+                libc::raise(libc::SIGSTOP);
+                libc::_exit(libc::EXIT_SUCCESS);
+            }
+
+            let mut status: libc::c_int = 0;
+            libc::waitpid(child_pid, &mut status, libc::WUNTRACED);
+            assert!(libc::WIFSTOPPED(status), "child did not stop");
+
+            let addr_space =
+                unw_create_addr_space(std::ptr::addr_of!(_UPT_accessors) as *mut UnwAccessors, 0);
+            let upt_info = _UPT_create(child_pid);
+            let mut cursor: UnwCursor = std::mem::zeroed();
+            let ret = unw_init_remote(&mut cursor, addr_space, upt_info);
+            assert_eq!(ret, 0, "unw_init_remote failed");
+
+            let mut frames = 0usize;
+            loop {
+                let step = unw_step_remote(&mut cursor);
+                if step <= 0 {
+                    break;
+                }
+                frames += 1;
+                if frames > 256 {
+                    break;
+                }
+            }
+            assert!(frames > 0, "expected at least one remote frame");
+
+            _UPT_destroy(upt_info);
+            unw_destroy_addr_space(addr_space);
+            libc::kill(child_pid, libc::SIGKILL);
+            libc::waitpid(child_pid, std::ptr::null_mut(), 0);
+        }
+    }
+
+    ///   1. Parent records its own pid and opens a pipe
+    ///   2. Parent forks; now it knows the child pid
+    ///   3. Parent calls `prctl(PR_SET_PTRACER, child_pid)` so the kernel
+    ///      allows the child to attach (required when ptrace_scope >= 1)
+    ///   4. Parent writes one byte to the pipe then blocks in `waitpid`
+    ///   5. Child reads the byte, calls `PTRACE_ATTACH` on the parent, waits
+    ///      for the parent to stop, unwinds its stack, asserts frames captured,
+    ///      detaches, and exits
+    ///   6. Parent's `waitpid` returns; asserts child exited cleanly
+    ///
+    /// We specifically test that the child process can unwind the parent's stack
+    /// because that is the use case in crashtracker
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn test_remote_child_ptrace_unwind() {
+        let _guard = FORK_MUTEX.lock().unwrap();
+        unsafe {
+            // Use the current thread's TID, not the process TGID. In the
+            // parallel test harness the test runs in a worker thread whose
+            // TID != getpid(); attaching to the TGID would be on the
+            // harness coordinator thread instead.
+            let parent_tid = libc::syscall(libc::SYS_gettid) as libc::pid_t;
+
+            let mut pipe_fds = [0i32; 2];
+            assert_eq!(libc::pipe(pipe_fds.as_mut_ptr()), 0);
+            let [pipe_r, pipe_w] = pipe_fds;
+
+            let child_pid = libc::fork();
+            assert!(child_pid >= 0, "fork failed");
+
+            if child_pid == 0 {
+                libc::close(pipe_w);
+
+                // Wait until the parent has called prctl.
+                let mut byte = 0u8;
+                libc::read(pipe_r, &mut byte as *mut u8 as *mut libc::c_void, 1);
+                libc::close(pipe_r);
+
+                // Attach to the parent thread and wait for it to stop.
+                // __WALL is required when the tracee is a thread (TID != TGID).
+                let ret = libc::ptrace(
+                    libc::PTRACE_ATTACH,
+                    parent_tid,
+                    std::ptr::null_mut::<libc::c_void>(),
+                    std::ptr::null_mut::<libc::c_void>(),
+                );
+                if ret != 0 {
+                    libc::_exit(1);
+                }
+                let mut status: libc::c_int = 0;
+                libc::waitpid(parent_tid, &mut status, libc::__WALL);
+                if !libc::WIFSTOPPED(status) {
+                    libc::ptrace(
+                        libc::PTRACE_DETACH,
+                        parent_tid,
+                        std::ptr::null_mut::<libc::c_void>(),
+                        std::ptr::null_mut::<libc::c_void>(),
+                    );
+                    libc::_exit(1);
+                }
+
+                // Walk the parent thread's stack.
+                let addr_space = unw_create_addr_space(
+                    std::ptr::addr_of!(_UPT_accessors) as *mut UnwAccessors,
+                    0,
+                );
+                let upt_info = _UPT_create(parent_tid);
+                let mut cursor: UnwCursor = std::mem::zeroed();
+                let ret = unw_init_remote(&mut cursor, addr_space, upt_info);
+
+                let mut frames = 0usize;
+                if ret == 0 {
+                    loop {
+                        let step = unw_step_remote(&mut cursor);
+                        if step <= 0 {
+                            break;
+                        }
+                        frames += 1;
+                        if frames > 256 {
+                            break;
+                        }
+                    }
+                }
+                assert!(frames > 0, "Expected at least one remote frame");
+
+                _UPT_destroy(upt_info);
+                unw_destroy_addr_space(addr_space);
+                libc::ptrace(
+                    libc::PTRACE_DETACH,
+                    parent_tid,
+                    std::ptr::null_mut::<libc::c_void>(),
+                    std::ptr::null_mut::<libc::c_void>(),
+                );
+                libc::_exit(if frames > 0 { 0 } else { 1 });
+            }
+
+            // Parent grants ptrace permission to child, then signals it
+            libc::close(pipe_r);
+            libc::prctl(libc::PR_SET_PTRACER, child_pid as libc::c_ulong, 0, 0, 0);
+            libc::write(pipe_w, b"g".as_ptr() as *const libc::c_void, 1);
+            libc::close(pipe_w);
+
+            // the child will stop us, unwind our stack, then detach
+            let mut status: libc::c_int = 0;
+            libc::waitpid(child_pid, &mut status, 0);
+            assert!(
+                libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0,
+                "child failed: status={status}"
+            );
+        }
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
 mod tests {
     use super::*;
 

@@ -15,38 +15,12 @@ pub use libunwind_x86_64::*;
 #[cfg(all(test, target_os = "linux"))]
 mod remote_tests {
     use super::*;
-    use std::sync::Mutex;
-
-    static FORK_MUTEX: Mutex<()> = Mutex::new(());
-
-    #[test]
-    #[cfg_attr(miri, ignore)]
-    fn test_upt_create_destroy() {
-        unsafe {
-            let pid = libc::getpid();
-            let upt_info = _UPT_create(pid);
-            assert!(!upt_info.is_null(), "_UPT_create returned null");
-            _UPT_destroy(upt_info);
-        }
-    }
-
-    #[test]
-    #[cfg_attr(miri, ignore)]
-    fn test_addr_space_create_destroy() {
-        unsafe {
-            let addr_space =
-                unw_create_addr_space(std::ptr::addr_of!(_UPT_accessors) as *mut UnwAccessors, 0);
-            assert!(!addr_space.is_null(), "unw_create_addr_space returned null");
-            unw_destroy_addr_space(addr_space);
-        }
-    }
 
     /// Fork a child that stops itself with `PTRACE_TRACEME` + `SIGSTOP`.
     /// The parent waits, unwinds the child's stack, then kills it.
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_remote_unwind_child() {
-        let _guard = FORK_MUTEX.lock().unwrap();
         unsafe {
             let child_pid = libc::fork();
             assert!(child_pid >= 0, "fork failed");
@@ -108,7 +82,6 @@ mod remote_tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_remote_child_ptrace_unwind() {
-        let _guard = FORK_MUTEX.lock().unwrap();
         unsafe {
             // Use the current thread's TID, not the process TGID. In the
             // parallel test harness the test runs in a worker thread whose

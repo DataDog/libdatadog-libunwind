@@ -165,7 +165,7 @@ docker_build_job:
       set -euxo pipefail
       export CARGO_HOME="${CI_PROJECT_DIR}/.cargo"
       export RUST_BACKTRACE=full
-      cargo test -j "${KUBERNETES_CPU_LIMIT:-4}"
+      cargo test -- --nocapture
   cache:
     key: "${TRIPLET}-${CI_COMMIT_REF_SLUG}"
     # Pull only: the build job already populated this cache entry.

@@ -48,15 +48,27 @@ mod remote_tests {
             assert_eq!(ret, 0, "unw_init_remote failed");
 
             let mut frames = 0usize;
-            loop {
-                let step = unw_step_remote(&mut cursor);
-                if step <= 0 {
+            while frames <= 256 {
+                if unw_step_remote(&mut cursor) <= 0 {
                     break;
                 }
                 frames += 1;
-                if frames > 256 {
-                    break;
-                }
+
+                let mut ip: UnwWord = 0;
+                unw_get_reg_remote(&mut cursor, UNW_REG_IP, &mut ip);
+                let mut name: [libc::c_char; 256] = [0; 256];
+                let mut offset: UnwWord = 0;
+                let sym =
+                    if unw_get_proc_name_remote(&mut cursor, name.as_mut_ptr(), 256, &mut offset)
+                        == 0
+                    {
+                        std::ffi::CStr::from_ptr(name.as_ptr())
+                            .to_string_lossy()
+                            .into_owned()
+                    } else {
+                        "<unknown>".to_owned()
+                    };
+                println!("  frame {frames:3}: ip=0x{ip:016x}  {sym}+0x{offset:x}");
             }
             assert!(frames > 0, "expected at least one remote frame");
 
@@ -67,6 +79,9 @@ mod remote_tests {
         }
     }
 
+    /// We specifically test that the child process can unwind the parent's stack
+    /// because that is the use case in crashtracker
+    ///
     ///   1. Parent records its own pid and opens a pipe
     ///   2. Parent forks; now it knows the child pid
     ///   3. Parent calls `prctl(PR_SET_PTRACER, child_pid)` so the kernel
@@ -76,9 +91,6 @@ mod remote_tests {
     ///      for the parent to stop, unwinds its stack, asserts frames captured,
     ///      detaches, and exits
     ///   6. Parent's `waitpid` returns; asserts child exited cleanly
-    ///
-    /// We specifically test that the child process can unwind the parent's stack
-    /// because that is the use case in crashtracker
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_remote_child_ptrace_unwind() {
@@ -89,7 +101,7 @@ mod remote_tests {
             // harness coordinator thread instead.
             let parent_tid = libc::syscall(libc::SYS_gettid) as libc::pid_t;
 
-            let mut pipe_fds = [0i32; 2];
+            let mut pipe_fds: [libc::c_int; 2] = [0; 2];
             assert_eq!(libc::pipe(pipe_fds.as_mut_ptr()), 0);
             let [pipe_r, pipe_w] = pipe_fds;
 
@@ -138,15 +150,31 @@ mod remote_tests {
 
                 let mut frames = 0usize;
                 if ret == 0 {
-                    loop {
-                        let step = unw_step_remote(&mut cursor);
-                        if step <= 0 {
+                    while frames <= 256 {
+                        if unw_step_remote(&mut cursor) <= 0 {
                             break;
                         }
                         frames += 1;
-                        if frames > 256 {
-                            break;
-                        }
+
+                        let mut ip: UnwWord = 0;
+                        unw_get_reg_remote(&mut cursor, UNW_REG_IP, &mut ip);
+                        let mut name: [libc::c_char; 256] = [0; 256];
+                        let mut offset: UnwWord = 0;
+                        let sym = if unw_get_proc_name_remote(
+                            &mut cursor,
+                            name.as_mut_ptr(),
+                            256,
+                            &mut offset,
+                        ) == 0
+                        {
+                            std::ffi::CStr::from_ptr(name.as_ptr())
+                                .to_string_lossy()
+                                .into_owned()
+                        } else {
+                            "<unknown>".to_owned()
+                        };
+                        // eprintln so it's visible from the forked child
+                        eprintln!("  frame {frames:3}: ip=0x{ip:016x}  {sym}+0x{offset:x}");
                     }
                 }
                 assert!(frames > 0, "Expected at least one remote frame");

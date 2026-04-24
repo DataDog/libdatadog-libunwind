@@ -17,9 +17,7 @@ pub type UnwAddrSpaceT = *mut libc::c_void;
 
 // Opaque accessor table (unw_accessors_t); never construct directly
 #[repr(C)]
-pub struct UnwAccessors {
-    _opaque: [u8; 0],
-}
+pub struct UnwAccessors;
 
 extern "C" {
     #[link_name = "_ULaarch64_init_local2"]
@@ -46,6 +44,7 @@ extern "C" {
 
 // Remote unwinding API. Uses _Uaarch64_* symbols from libunwind-aarch64
 // because the _ULaarch64_* dont have remote support
+#[allow(improper_ctypes)]
 extern "C" {
     #[link_name = "_Uaarch64_init_remote"]
     pub fn unw_init_remote(

@@ -16,11 +16,8 @@ pub struct UnwCursor {
 // Opaque address space handle (unw_addr_space_t)
 pub type UnwAddrSpaceT = *mut libc::c_void;
 
-// Opaque accessor table (unw_accessors_t); never construct directly
 #[repr(C)]
-pub struct UnwAccessors {
-    _opaque: [u8; 0],
-}
+pub struct UnwAccessors;
 
 // This is a subset of the libunwind API.
 
@@ -49,6 +46,7 @@ extern "C" {
 
 // Remote unwinding API. Uses _Ux86_64_* symbols from libunwind-x86_64
 // because the _ULx86_64_* dont have remote support
+#[allow(improper_ctypes)]
 extern "C" {
     #[link_name = "_Ux86_64_init_remote"]
     pub fn unw_init_remote(

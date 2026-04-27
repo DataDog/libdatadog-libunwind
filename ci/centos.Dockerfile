@@ -26,7 +26,8 @@ RUN yum install -y centos-release-scl \
   && sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/CentOS-SCLo-*.repo \
   && yum install -y --setopt=tsflags=nodocs --nogpgcheck \
     curl \
-    devtoolset-9 \
+    devtoolset-9-gcc \
+    devtoolset-9-gcc-c++ \
     make \
     autoconf \
     automake \

@@ -1,7 +1,7 @@
 # Copyright 2026-Present Datadog, Inc. https://www.datadoghq.com/
 # SPDX-License-Identifier: Apache-2.0
 #
-# Matrix: {x86_64, aarch64} × {CentOS Stream 9 (gnu), Alpine 3.21 (musl)}
+# Matrix: {x86_64, aarch64} × {CentOS 7 (gnu), Alpine 3.22.0 (musl)}
 
 stages:
   - ci_images
@@ -9,10 +9,7 @@ stages:
   - test
 
 variables:
-  # CentOS 7 base keeps glibc at 2.17, maximising binary compatibility.
   BASE_IMAGE_CENTOS: registry.ddbuild.io/images/mirror/centos:centos7
-  # TODO: pin alpine to a digest once stable, e.g.:
-  # BASE_IMAGE_ALPINE: "registry.ddbuild.io/images/mirror/alpine@sha256:<digest>"
   BASE_IMAGE_ALPINE: registry.ddbuild.io/images/mirror/alpine:3.22.0
 
   # To update the build images:
@@ -22,8 +19,8 @@ variables:
   # 3. Bump CI_IMAGE_STICKY_VERSION to the value of CI_IMAGE_CURRENT_BUILD_VERSION
   # 4. Bump CI_IMAGE_CURRENT_BUILD_VERSION to current value + 1
   # 5. Push, get a review, merge
-  CI_IMAGE_STICKY_VERSION: 1
-  CI_IMAGE_CURRENT_BUILD_VERSION: 2
+  CI_IMAGE_STICKY_VERSION: 3
+  CI_IMAGE_CURRENT_BUILD_VERSION: 4
 
   PUSH_PREFIX: registry.ddbuild.io/ci/libdatadog-libunwind:dependencies
   BUILD_IMAGE_CENTOS: registry.ddbuild.io/ci/libdatadog-libunwind:dependencies_centos_${CI_IMAGE_STICKY_VERSION}
@@ -43,6 +40,7 @@ default:
       - api_failure
 
 # CI image build
+
 docker_build_job:
   stage: ci_images
   when: manual
@@ -95,7 +93,6 @@ docker_build_job:
   variables:
     OS_NAME: centos
     TRIPLET: x86_64-unknown-linux-gnu
-    # Source devtoolset-9 (GCC 9) automatically in every bash/sh session.
     BASH_ENV: /opt/rh/devtoolset-9/enable
     ENV: /opt/rh/devtoolset-9/enable
     KUBERNETES_CPU_REQUEST: 3

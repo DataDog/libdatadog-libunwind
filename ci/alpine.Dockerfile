@@ -25,6 +25,8 @@ SHELL ["/bin/bash", "-c"]
 
 FROM base AS nextest
 
+ENV PATH="/root/.cargo/bin:$PATH"
+
 RUN cargo install --locked 'cargo-nextest@0.9.96'
 
 FROM nextest AS final

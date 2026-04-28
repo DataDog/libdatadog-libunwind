@@ -19,8 +19,8 @@ variables:
   # 3. Bump CI_IMAGE_STICKY_VERSION to the value of CI_IMAGE_CURRENT_BUILD_VERSION
   # 4. Bump CI_IMAGE_CURRENT_BUILD_VERSION to current value + 1
   # 5. Push, get a review, merge
-  CI_IMAGE_STICKY_VERSION: 4
-  CI_IMAGE_CURRENT_BUILD_VERSION: 5
+  CI_IMAGE_STICKY_VERSION: 5
+  CI_IMAGE_CURRENT_BUILD_VERSION: 6
 
   PUSH_PREFIX: registry.ddbuild.io/ci/libdatadog-libunwind:dependencies
   BUILD_IMAGE_CENTOS: registry.ddbuild.io/ci/libdatadog-libunwind:dependencies_centos_${CI_IMAGE_STICKY_VERSION}

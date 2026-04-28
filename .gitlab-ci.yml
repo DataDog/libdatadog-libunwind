@@ -7,6 +7,7 @@ stages:
   - ci_images
   - build
   - test
+  - publish
 
 variables:
   BASE_IMAGE_CENTOS: registry.ddbuild.io/images/mirror/centos:centos7
@@ -219,3 +220,65 @@ test_rust_on_alpine_arm64:
   extends: .test_rust
   needs:
     - job: build_rust_on_alpine_arm64
+
+# Publish step
+
+publish_crate:
+  <<: *on_centos_amd_runner
+  stage: publish
+  # Appears in the pipeline for any version tag (v1.2.3) but requires a
+  # manual click to actually publish.  Push the tag on the branch you want
+  # to release from, then trigger the job when ready.
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'
+      when: manual
+      allow_failure: false
+  script: |
+    set -euxo pipefail
+    export CARGO_HOME="${CI_PROJECT_DIR}/.cargo"
+
+    VERSION="${CI_COMMIT_TAG#v}"
+    CRATE_NAME="libdd-libunwind-sys"
+
+    # 1. Validate tag version matches Cargo.toml
+    MANIFEST_VERSION=$(grep -Po '^version\s*=\s*"\K[^"]+' Cargo.toml | head -1)
+    if [ "$VERSION" != "$MANIFEST_VERSION" ]; then
+      echo "ERROR: tag version ($VERSION) != Cargo.toml version ($MANIFEST_VERSION)"
+      exit 1
+    fi
+    echo "version $VERSION matches Cargo.toml"
+
+    # 2. Check whether already published
+    HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+      -A "libdatadog-libunwind-ci/1.0" \
+      "https://crates.io/api/v1/crates/${CRATE_NAME}/${VERSION}")
+    if [ "$HTTP_STATUS" = "200" ]; then
+      echo "${CRATE_NAME} ${VERSION} is already on crates.io — nothing to do"
+      exit 0
+    fi
+
+    # 3. Install AWS CLI
+    yum install -y --setopt=tsflags=nodocs --nogpgcheck unzip
+    ARCH=$(uname -m)   # x86_64 or aarch64
+    curl -sSL "https://awscli.amazonaws.com/awscli-exe-linux-${ARCH}.zip" -o /tmp/awscliv2.zip
+    unzip -q /tmp/awscliv2.zip -d /tmp/awscli
+    /tmp/awscli/aws/install -i /opt/aws-cli -b /tmp/aws-bin
+
+    # 4. Fetch crates.io token from AWS SSM.
+    set +x
+    CARGO_REGISTRY_TOKEN=$(/tmp/aws-bin/aws ssm get-parameter \
+      --region us-east-1 \
+      --name "ci.libdatadog-libunwind.cratesio-token" \
+      --with-decryption \
+      --query "Parameter.Value" \
+      --out text)
+    export CARGO_REGISTRY_TOKEN
+    set -x
+
+    # 5. Dry-run.
+    cargo publish --dry-run --locked
+    echo "dry-run passed"
+
+    # 6. Publish.
+    # cargo publish --locked
+    # echo "published ${CRATE_NAME} ${VERSION} to crates.io"

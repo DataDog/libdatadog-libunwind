@@ -23,4 +23,8 @@ RUN apk update \
 
 SHELL ["/bin/bash", "-c"]
 
-FROM base AS final
+FROM base AS nextest
+
+RUN cargo install --locked 'cargo-nextest@0.9.96'
+
+FROM nextest AS final

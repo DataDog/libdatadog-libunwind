@@ -51,4 +51,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
 
 RUN rustc --version && cargo --version
 
+RUN source /opt/rh/devtoolset-9/enable \
+  && cargo install --locked 'cargo-nextest@0.9.96'
+
 FROM rust AS final

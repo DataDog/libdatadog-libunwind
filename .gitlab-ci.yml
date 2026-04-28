@@ -19,8 +19,8 @@ variables:
   # 3. Bump CI_IMAGE_STICKY_VERSION to the value of CI_IMAGE_CURRENT_BUILD_VERSION
   # 4. Bump CI_IMAGE_CURRENT_BUILD_VERSION to current value + 1
   # 5. Push, get a review, merge
-  CI_IMAGE_STICKY_VERSION: 3
-  CI_IMAGE_CURRENT_BUILD_VERSION: 4
+  CI_IMAGE_STICKY_VERSION: 4
+  CI_IMAGE_CURRENT_BUILD_VERSION: 5
 
   PUSH_PREFIX: registry.ddbuild.io/ci/libdatadog-libunwind:dependencies
   BUILD_IMAGE_CENTOS: registry.ddbuild.io/ci/libdatadog-libunwind:dependencies_centos_${CI_IMAGE_STICKY_VERSION}
@@ -165,11 +165,11 @@ docker_build_job:
       set -euxo pipefail
       export CARGO_HOME="${CI_PROJECT_DIR}/.cargo"
       export RUST_BACKTRACE=full
-      cargo test -- --nocapture
+      cargo nextest run --success-output final -j "${KUBERNETES_CPU_LIMIT:-4}"
   cache:
     key: "${TRIPLET}-${CI_COMMIT_REF_SLUG}"
     # Pull only: the build job already populated this cache entry.
-    # On a cache miss cargo test will fall back to a full rebuild.
+    # On a cache miss cargo nextest will fall back to a full rebuild.
     policy: pull
     paths:
       - .cargo/registry/

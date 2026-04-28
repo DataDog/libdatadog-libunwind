@@ -100,7 +100,7 @@ docker_build_job:
     KUBERNETES_MEMORY_REQUEST: 4Gi
     KUBERNETES_MEMORY_LIMIT: 4Gi
 
-.on_centos_arm_runner: &on_centos_arm_runner
+.on_centos_arm64_runner: &on_centos_arm64_runner
   image: ${BUILD_IMAGE_CENTOS}
   tags: ["arch:arm64"]
   variables:
@@ -124,7 +124,7 @@ docker_build_job:
     KUBERNETES_MEMORY_REQUEST: 4Gi
     KUBERNETES_MEMORY_LIMIT: 4Gi
 
-.on_alpine_arm_runner: &on_alpine_arm_runner
+.on_alpine_arm64_runner: &on_alpine_arm64_runner
   image: ${BUILD_IMAGE_ALPINE}
   tags: ["arch:arm64"]
   variables:
@@ -182,16 +182,16 @@ build_rust_on_centos_amd:
   <<: *on_centos_amd_runner
   extends: .build_rust
 
-build_rust_on_centos_arm:
-  <<: *on_centos_arm_runner
+build_rust_on_centos_arm64:
+  <<: *on_centos_arm64_runner
   extends: .build_rust
 
 build_rust_on_alpine_amd:
   <<: *on_alpine_amd_runner
   extends: .build_rust
 
-build_rust_on_alpine_arm:
-  <<: *on_alpine_arm_runner
+build_rust_on_alpine_arm64:
+  <<: *on_alpine_arm64_runner
   extends: .build_rust
 
 # Test jobs
@@ -202,11 +202,11 @@ test_rust_on_centos_amd:
   needs:
     - job: build_rust_on_centos_amd
 
-test_rust_on_centos_arm:
-  <<: *on_centos_arm_runner
+test_rust_on_centos_arm64:
+  <<: *on_centos_arm64_runner
   extends: .test_rust
   needs:
-    - job: build_rust_on_centos_arm
+    - job: build_rust_on_centos_arm64
 
 test_rust_on_alpine_amd:
   <<: *on_alpine_amd_runner
@@ -214,8 +214,8 @@ test_rust_on_alpine_amd:
   needs:
     - job: build_rust_on_alpine_amd
 
-test_rust_on_alpine_arm:
-  <<: *on_alpine_arm_runner
+test_rust_on_alpine_arm64:
+  <<: *on_alpine_arm64_runner
   extends: .test_rust
   needs:
-    - job: build_rust_on_alpine_arm
+    - job: build_rust_on_alpine_arm64

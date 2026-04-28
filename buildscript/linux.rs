@@ -67,6 +67,7 @@ pub fn main() {
 
     println!("cargo:rustc-link-search=native={}", lib_path.display());
     println!("cargo:rustc-link-lib=static=unwind");
+    println!("cargo:rustc-link-lib=static=unwind-ptrace");
     println!("cargo:rustc-link-lib=static=unwind-{}", arch);
 
     println!("cargo:include={}", include_path.display());

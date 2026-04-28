@@ -1,0 +1,221 @@
+# Copyright 2026-Present Datadog, Inc. https://www.datadoghq.com/
+# SPDX-License-Identifier: Apache-2.0
+#
+# Matrix: {x86_64, aarch64} × {CentOS 7 (gnu), Alpine 3.22.0 (musl)}
+
+stages:
+  - ci_images
+  - build
+  - test
+
+variables:
+  BASE_IMAGE_CENTOS: registry.ddbuild.io/images/mirror/centos:centos7
+  BASE_IMAGE_ALPINE: registry.ddbuild.io/images/mirror/alpine:3.22.0
+
+  # To update the build images:
+  # 1. Edit centos.Dockerfile or alpine.Dockerfile and push to your branch
+  # 2. Trigger the manual docker_build_job in your branch (uses CI_IMAGE_CURRENT_BUILD_VERSION)
+  #    Important: build both OS variants — they share the same version number
+  # 3. Bump CI_IMAGE_STICKY_VERSION to the value of CI_IMAGE_CURRENT_BUILD_VERSION
+  # 4. Bump CI_IMAGE_CURRENT_BUILD_VERSION to current value + 1
+  # 5. Push, get a review, merge
+  CI_IMAGE_STICKY_VERSION: 3
+  CI_IMAGE_CURRENT_BUILD_VERSION: 4
+
+  PUSH_PREFIX: registry.ddbuild.io/ci/libdatadog-libunwind:dependencies
+  BUILD_IMAGE_CENTOS: registry.ddbuild.io/ci/libdatadog-libunwind:dependencies_centos_${CI_IMAGE_STICKY_VERSION}
+  BUILD_IMAGE_ALPINE: registry.ddbuild.io/ci/libdatadog-libunwind:dependencies_alpine_${CI_IMAGE_STICKY_VERSION}
+
+  KUBERNETES_SERVICE_ACCOUNT_OVERWRITE: libdatadog-libunwind
+  RUST_BACKTRACE: 1
+
+default:
+  retry:
+    max: 1
+    when:
+      - unknown_failure
+      - data_integrity_failure
+      - runner_system_failure
+      - scheduler_failure
+      - api_failure
+
+# CI image build
+
+docker_build_job:
+  stage: ci_images
+  when: manual
+  # Do not run on tag pushes or scheduled pipelines.
+  except: [tags, schedules]
+  tags: ["arch:amd64"]
+  parallel:
+    matrix:
+      - OS_NAME: ["centos", "alpine"]
+        FQ_ARCH: "amd64"
+  image: registry.ddbuild.io/docker:20.10.3
+  id_tokens:
+    DDSIGN_ID_TOKEN:
+      aud: image-integrity
+  variables:
+    CI_ENABLE_CONTAINER_IMAGE_BUILDS: "true"
+  script: |
+    set -xeo pipefail
+
+    if [[ ${CI_IMAGE_CURRENT_BUILD_VERSION} -le ${CI_IMAGE_STICKY_VERSION} ]]; then
+      echo "CI_IMAGE_CURRENT_BUILD_VERSION (${CI_IMAGE_CURRENT_BUILD_VERSION}) must be greater than"
+      echo "CI_IMAGE_STICKY_VERSION (${CI_IMAGE_STICKY_VERSION}). Bump it or you will overwrite the"
+      echo "current sticky image and break builds on other branches."
+      exit 1
+    fi
+
+    OS_NAME_UPPER=$(echo "${OS_NAME}" | tr 'a-z' 'A-Z')
+    BASE_IMAGE=$(eval echo "\$BASE_IMAGE_${OS_NAME_UPPER}")
+    export PUSH_IMAGE="${PUSH_PREFIX}_${OS_NAME}_${CI_IMAGE_CURRENT_BUILD_VERSION}"
+    export CACHE_IMAGE="${PUSH_PREFIX}_${OS_NAME}_${CI_IMAGE_STICKY_VERSION}"
+
+    METADATA_FILE=$(mktemp)
+    docker buildx build . -f "ci/${OS_NAME}.Dockerfile" \
+      --platform linux/amd64,linux/arm64 \
+      --build-arg BUILDKIT_INLINE_CACHE=1 \
+      --build-arg BASE_IMAGE="${BASE_IMAGE}" \
+      --cache-from "${CACHE_IMAGE}" \
+      --tag "${PUSH_IMAGE}" \
+      --target=final \
+      --push \
+      --metadata-file "${METADATA_FILE}"
+
+    ddsign sign "${PUSH_IMAGE}" --docker-metadata-file "${METADATA_FILE}"
+
+# Runner anchors
+
+.on_centos_amd_runner: &on_centos_amd_runner
+  image: ${BUILD_IMAGE_CENTOS}
+  tags: ["arch:amd64"]
+  variables:
+    OS_NAME: centos
+    TRIPLET: x86_64-unknown-linux-gnu
+    BASH_ENV: /opt/rh/devtoolset-9/enable
+    ENV: /opt/rh/devtoolset-9/enable
+    KUBERNETES_CPU_REQUEST: 3
+    KUBERNETES_CPU_LIMIT: 4
+    KUBERNETES_MEMORY_REQUEST: 4Gi
+    KUBERNETES_MEMORY_LIMIT: 4Gi
+
+.on_centos_arm64_runner: &on_centos_arm64_runner
+  image: ${BUILD_IMAGE_CENTOS}
+  tags: ["arch:arm64"]
+  variables:
+    OS_NAME: centos
+    TRIPLET: aarch64-unknown-linux-gnu
+    BASH_ENV: /opt/rh/devtoolset-9/enable
+    ENV: /opt/rh/devtoolset-9/enable
+    KUBERNETES_CPU_REQUEST: 3
+    KUBERNETES_CPU_LIMIT: 4
+    KUBERNETES_MEMORY_REQUEST: 4Gi
+    KUBERNETES_MEMORY_LIMIT: 4Gi
+
+.on_alpine_amd_runner: &on_alpine_amd_runner
+  image: ${BUILD_IMAGE_ALPINE}
+  tags: ["arch:amd64"]
+  variables:
+    OS_NAME: alpine
+    TRIPLET: x86_64-alpine-linux-musl
+    KUBERNETES_CPU_REQUEST: 3
+    KUBERNETES_CPU_LIMIT: 4
+    KUBERNETES_MEMORY_REQUEST: 4Gi
+    KUBERNETES_MEMORY_LIMIT: 4Gi
+
+.on_alpine_arm64_runner: &on_alpine_arm64_runner
+  image: ${BUILD_IMAGE_ALPINE}
+  tags: ["arch:arm64"]
+  variables:
+    OS_NAME: alpine
+    TRIPLET: aarch64-alpine-linux-musl
+    KUBERNETES_CPU_REQUEST: 3
+    KUBERNETES_CPU_LIMIT: 4
+    KUBERNETES_MEMORY_REQUEST: 4Gi
+    KUBERNETES_MEMORY_LIMIT: 4Gi
+
+# Job templates
+#
+# Both templates use TRIPLET (set per runner anchor) as the cache key so the
+# build and test jobs for each configuration share the same cache entry:
+# the build job populates it, the test job pulls from it.
+
+.build_rust:
+  stage: build
+  script:
+    - rustc --version
+    - |
+      set -euxo pipefail
+      export CARGO_HOME="${CI_PROJECT_DIR}/.cargo"
+      export RUST_BACKTRACE=full
+      cargo build -j "${KUBERNETES_CPU_LIMIT:-4}"
+  cache:
+    key: "${TRIPLET}-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - .cargo/registry/
+      - .cargo/git/
+      - target/
+
+.test_rust:
+  stage: test
+  script:
+    - rustc --version
+    - |
+      set -euxo pipefail
+      export CARGO_HOME="${CI_PROJECT_DIR}/.cargo"
+      export RUST_BACKTRACE=full
+      cargo test -j "${KUBERNETES_CPU_LIMIT:-4}"
+  cache:
+    key: "${TRIPLET}-${CI_COMMIT_REF_SLUG}"
+    # Pull only: the build job already populated this cache entry.
+    # On a cache miss cargo test will fall back to a full rebuild.
+    policy: pull
+    paths:
+      - .cargo/registry/
+      - .cargo/git/
+      - target/
+
+# Build jobs
+
+build_rust_on_centos_amd:
+  <<: *on_centos_amd_runner
+  extends: .build_rust
+
+build_rust_on_centos_arm64:
+  <<: *on_centos_arm64_runner
+  extends: .build_rust
+
+build_rust_on_alpine_amd:
+  <<: *on_alpine_amd_runner
+  extends: .build_rust
+
+build_rust_on_alpine_arm64:
+  <<: *on_alpine_arm64_runner
+  extends: .build_rust
+
+# Test jobs
+
+test_rust_on_centos_amd:
+  <<: *on_centos_amd_runner
+  extends: .test_rust
+  needs:
+    - job: build_rust_on_centos_amd
+
+test_rust_on_centos_arm64:
+  <<: *on_centos_arm64_runner
+  extends: .test_rust
+  needs:
+    - job: build_rust_on_centos_arm64
+
+test_rust_on_alpine_amd:
+  <<: *on_alpine_amd_runner
+  extends: .test_rust
+  needs:
+    - job: build_rust_on_alpine_amd
+
+test_rust_on_alpine_arm64:
+  <<: *on_alpine_arm64_runner
+  extends: .test_rust
+  needs:
+    - job: build_rust_on_alpine_arm64

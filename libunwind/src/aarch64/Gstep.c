@@ -2,7 +2,7 @@
    Copyright (C) 2008 CodeSourcery
    Copyright (C) 2011-2013 Linaro Limited
    Copyright (C) 2012 Tommi Rantala <tt.rantala@gmail.com>
-   Copyright 2022 Blackberry Limited.
+   Copyright 2022,2024 Blackberry Limited.
 
 This file is part of libunwind.
 
@@ -40,7 +40,7 @@ static const int WSIZE = sizeof (unw_word_t);
   \note The current implementation only supports little endian modes.
 */
 static int
-is_plt_entry (struct dwarf_cursor *c)
+_is_plt_entry (struct dwarf_cursor *c)
 {
   unw_word_t w0 = 0, w1 = 0;
   unw_accessors_t *a;
@@ -150,12 +150,19 @@ is_plt_entry (struct dwarf_cursor *c)
     }
 }
 
+int
+unw_is_plt_entry (unw_cursor_t *uc)
+{
+	return _is_plt_entry (&((struct cursor *)uc)->dwarf);
+}
+
 typedef enum frame_record_location
   {
     NONE,           /* frame record creation has not been detected, use LR */
     AT_SP_OFFSET,   /* frame record creation has been detected, but FP
                        update not detected */
     AT_FP,          /* frame record creation and FP update detected */
+    NO_PROC_INFO,   /* no proc info available */
   } frame_record_location_t;
 
 typedef struct frame_state
@@ -184,11 +191,11 @@ get_frame_state (unw_cursor_t *cursor)
   unw_accessors_t *a = unw_get_accessors (c->dwarf.as);
   unw_word_t w, start_ip, ip, offp;
   frame_state_t fs;
-  fs.loc = NONE;
+  fs.loc = NO_PROC_INFO;
   fs.offset = 0;
 
   /* PLT entries do not create frame records */
-  if (is_plt_entry (&c->dwarf))
+  if (_is_plt_entry (&c->dwarf))
     return fs;
 
   /* Use get_proc_name to find start_ip of procedure */
@@ -196,7 +203,12 @@ get_frame_state (unw_cursor_t *cursor)
   if (((*a->get_proc_name) (c->dwarf.as, c->dwarf.ip, name, sizeof(name), &offp, c->dwarf.as_arg)) != 0)
     return fs;
 
+  fs.loc = NONE;
   start_ip = c->dwarf.ip - offp;
+
+  frame_state_t saved_fs;
+  saved_fs.loc = NONE;
+  saved_fs.offset = 0;
 
   /* Check for frame record instructions since the start of the procedure (start_ip).
    * access_mem reads WSIZE bytes, so two instructions are checked in each iteration
@@ -343,10 +355,27 @@ get_frame_state (unw_cursor_t *cursor)
           if ((((w & 0xfe407fff00000000) == 0xa8407bfd00000000) && (c->dwarf.ip > ip + 4))
            || (((w & 0x00000000fe407fff) == 0x00000000a8407bfd) && (c->dwarf.ip > ip)))
             {
+              saved_fs = fs;
               fs.loc = NONE;
               fs.offset = 0;
 
               Debug (4, "ip=0x%lx => frame record has been loaded, use LR\n", ip);
+            }
+        }
+
+      /* Check for RET instruction (0xd65f03c0). If IP is past a RET, execution
+         reached this point via a branch that skipped the epilogue, so the frame
+         record is still intact. Restore the state from before the epilogue. */
+      if (fs.loc == NONE && saved_fs.loc != NONE)
+        {
+          if ((((w & 0xffffffff00000000) == 0xd65f03c000000000) && (c->dwarf.ip > ip + 4))
+           || (((w & 0x00000000ffffffff) == 0x00000000d65f03c0) && (c->dwarf.ip > ip)))
+            {
+              fs = saved_fs;
+              saved_fs.loc = NONE;
+              saved_fs.offset = 0;
+
+              Debug (4, "ip=0x%lx => past RET, restoring frame state to loc=%d\n", ip, fs.loc);
             }
         }
     }
@@ -512,18 +541,45 @@ aarch64_handle_signal_frame (unw_cursor_t *cursor)
 {
   struct cursor *c = (struct cursor *) cursor;
   int i, ret;
-  unw_word_t sc_addr, sp, sp_addr = c->dwarf.cfa;
-  struct dwarf_loc sp_loc = DWARF_LOC (sp_addr, 0);
-
-  if ((ret = dwarf_get (&c->dwarf, sp_loc, &sp)) < 0)
-    return -UNW_EUNSPEC;
+  unw_word_t sp_addr = c->dwarf.cfa;
+  unw_word_t sc_addr;
 
   ret = unw_is_signal_frame (cursor);
-  Debug(1, "unw_is_signal_frame()=%d\n", ret);
   if (ret > 0)
     {
       c->sigcontext_format = SCF_FORMAT;
+#if defined(__QNXNTO__)
+      /*
+       * The QNX signal trampoline receives a pointer to a _sighandler_info
+       * struct in r19, which it breaks apart and passes the relevant args to
+       * the signal handler in r0, r1, and r2 folowing the ARM AAPCS64
+       * convention, regardless of whether SA_SIGINFO is specified in sa_flags.
+       * Since r0-2 are not preserved registers, their value is
+       * lost by the time the unwinder gets here, but r19 is preserved so it
+       * should still be valid. If full DWARF unwinding has happened.
+       */
+      unw_word_t x19;
+      ret = dwarf_get (&c->dwarf, c->dwarf.loc[UNW_AARCH64_X19], &x19);
+      if ((ret < 0) || (x19 == 0UL))
+        {
+          return -UNW_EUNSPEC;
+        }
+
+      ret = dwarf_get (&c->dwarf,
+                       DWARF_MEM_LOC (c->dwarf, x19 + SI_UCONTEXT_OFF),
+                       &sc_addr);
+      if (ret < 0)
+        {
+          return -UNW_EUNSPEC;
+        }
+
+      sc_addr += UC_MCONTEXT_OFF;
+#else
+      /*
+       * For non-QNX OSes the mcontext is expected to be on the signal stack,
+       */
       sc_addr = sp_addr + sizeof (siginfo_t) + UC_MCONTEXT_OFF;
+#endif
     }
   else
     return -UNW_EUNSPEC;
@@ -605,6 +661,7 @@ unw_step (unw_cursor_t *cursor)
 
   /* Check if this is a signal frame. */
   ret = unw_is_signal_frame (cursor);
+  Debug(1, "unw_is_signal_frame()=%d\n", ret);
   if (ret > 0)
     return aarch64_handle_signal_frame (cursor);
   else if (unlikely (ret < 0))
@@ -619,6 +676,8 @@ unw_step (unw_cursor_t *cursor)
   /* Try DWARF-based unwinding... */
   c->sigcontext_format = AARCH64_SCF_NONE;
   ret = dwarf_step (&c->dwarf);
+  c->dwarf_step_ret = ret;
+  c->step_method = UNW_STEP_DWARF;
   Debug(1, "dwarf_step()=%d\n", ret);
 
   /* Restore default memory validation state */
@@ -655,7 +714,7 @@ unw_step (unw_cursor_t *cursor)
           c->validate = 1;
         }
 
-      if (is_plt_entry (&c->dwarf))
+      if (_is_plt_entry (&c->dwarf))
         {
           Debug (2, "found plt entry\n");
           c->frame_info.frame_type = UNW_AARCH64_FRAME_STANDARD;
@@ -677,10 +736,11 @@ unw_step (unw_cursor_t *cursor)
 
       /* Prefer using frame record. The LR value is stored at an offset of
          8 into the frame record.  */
-      if (fs.loc != NONE)
+      if (fs.loc != NONE && fs.loc != NO_PROC_INFO)
         {
           if (fs.loc == AT_FP)
             {
+              c->step_method = UNW_STEP_FALLBACK_FP;
               /* X29 points to frame record.  */
               ret = dwarf_get (&c->dwarf, c->dwarf.loc[UNW_AARCH64_X29], &fp);
               if (unlikely (ret == 0))
@@ -706,6 +766,7 @@ unw_step (unw_cursor_t *cursor)
             }
           else
             {
+              c->step_method = UNW_STEP_FALLBACK_SP;
               /* Frame record stored but not pointed to by X29, use SP.  */
               unw_word_t sp;
               ret = dwarf_get (&c->dwarf, c->dwarf.loc[UNW_AARCH64_SP], &sp);
@@ -739,6 +800,15 @@ unw_step (unw_cursor_t *cursor)
         }
 
       /* No frame record, fallback to link register (X30).  */
+      if (fs.loc == NO_PROC_INFO)
+        {
+          c->step_method = UNW_STEP_FALLBACK_LR_NO_PROC_INFO;
+        }
+      else
+        {
+          c->step_method = UNW_STEP_FALLBACK_LR;
+        }
+      c->loc_info = fs.loc;
       c->frame_info.cfa_reg_offset = 0;
       c->frame_info.cfa_reg_sp = 0;
       c->frame_info.fp_cfa_offset = -1;

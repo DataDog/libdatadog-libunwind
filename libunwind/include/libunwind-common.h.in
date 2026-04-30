@@ -261,6 +261,41 @@ typedef struct unw_save_loc
   }
 unw_save_loc_t;
 
+typedef enum
+  {
+    UNW_STEP_DWARF,			/* dwarf_step succeeded */
+    UNW_STEP_FALLBACK_FP,		/* dwarf_step failed, fell back to frame pointer */
+    UNW_STEP_FALLBACK_SP,		/* dwarf_step failed, fell back to SP offset */
+    UNW_STEP_FALLBACK_LR,		/* dwarf_step failed, fell back to link register */
+    UNW_STEP_FALLBACK_LR_NO_PROC_INFO	/* dwarf_step failed, fell back to link register but no proc info available */
+  }
+unw_step_method_t;
+
+typedef enum
+  {
+    UNW_FRAME_RECORD_NONE,		/* no frame record detected, use LR */
+    UNW_FRAME_RECORD_AT_SP_OFFSET,	/* frame record detected, FP not yet updated */
+    UNW_FRAME_RECORD_AT_FP,		/* frame record detected and FP updated */
+    UNW_FRAME_RECORD_NO_PROC_INFO	/* no proc info available */
+  }
+unw_frame_record_location_t;
+
+typedef struct unw_cursor_snapshot
+  {
+    unw_word_t cfa;		/* canonical frame address (dwarf.cfa) */
+    unw_word_t ip;		/* instruction pointer (dwarf.ip) */
+    unw_word_t loc_sp;		/* loc[SP].val */
+    unw_word_t loc_ip;		/* loc[IP].val (X30 on aarch64) */
+    unw_word_t loc_fp;		/* loc[FP].val (X29 on aarch64) */
+    int dwarf_step_ret;		/* return value of dwarf_step */
+    unw_step_method_t step_method;
+    int frame_type;		/* frame_info.frame_type */
+    int cfa_reg_sp;		/* frame_info.cfa_reg_sp */
+    int cfa_reg_offset;		/* frame_info.cfa_reg_offset */
+    unw_frame_record_location_t loc_info;	/* frame record location from get_frame_state */
+  }
+unw_cursor_snapshot_t;
+
 struct dl_phdr_info;
 typedef int (*unw_iterate_phdr_callback_t) (struct dl_phdr_info *, size_t, void *);
 typedef int (*unw_iterate_phdr_func_t) (unw_iterate_phdr_callback_t, void *);
@@ -288,6 +323,7 @@ typedef int (*unw_iterate_phdr_func_t) (unw_iterate_phdr_callback_t, void *);
 #define unw_set_fpreg			UNW_OBJ(set_fpreg)
 #define unw_get_save_loc		UNW_OBJ(get_save_loc)
 #define unw_is_signal_frame		UNW_OBJ(is_signal_frame)
+#define unw_is_plt_entry        UNW_OBJ(is_plt_entry)
 #define unw_get_proc_name		UNW_OBJ(get_proc_name)
 #define unw_get_proc_name_by_ip		UNW_OBJ(get_proc_name_by_ip)
 #define unw_get_elf_filename		UNW_OBJ(get_elf_filename)
@@ -295,6 +331,7 @@ typedef int (*unw_iterate_phdr_func_t) (unw_iterate_phdr_callback_t, void *);
 #define unw_set_caching_policy		UNW_OBJ(set_caching_policy)
 #define unw_set_cache_size		UNW_OBJ(set_cache_size)
 #define unw_set_iterate_phdr_function	UNW_OBJ(set_iterate_phdr_function)
+#define unw_get_cursor_snapshot		UNW_OBJ(get_cursor_snapshot)
 #define unw_regname			UNW_ARCH_OBJ(regname)
 #define unw_flush_cache			UNW_ARCH_OBJ(flush_cache)
 #define unw_strerror			UNW_ARCH_OBJ(strerror)
@@ -331,6 +368,7 @@ extern int unw_get_fpreg (unw_cursor_t *, int, unw_fpreg_t *);
 extern int unw_set_fpreg (unw_cursor_t *, int, unw_fpreg_t);
 extern int unw_get_save_loc (unw_cursor_t *, int, unw_save_loc_t *);
 extern int unw_is_signal_frame (unw_cursor_t *);
+extern int unw_is_plt_entry (unw_cursor_t *);
 extern int unw_get_proc_name (unw_cursor_t *, char *, size_t, unw_word_t *);
 extern int unw_get_proc_name_by_ip (unw_addr_space_t, unw_word_t, char *,
 				    size_t, unw_word_t *, void *);
@@ -340,5 +378,6 @@ extern int unw_get_elf_filename_by_ip (unw_addr_space_t, unw_word_t, char *,
 extern const char *unw_strerror (int);
 extern int unw_backtrace (void **, int);
 extern int unw_backtrace2 (void **, int, unw_context_t*, int);
+extern int unw_get_cursor_snapshot (unw_cursor_t *, unw_cursor_snapshot_t *);
 
 extern unw_addr_space_t unw_local_addr_space;

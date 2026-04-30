@@ -131,9 +131,10 @@ XFAIL_TESTS = $(am__EXEEXT_23) $(am__EXEEXT_24) $(am__append_24) \
 @ARCH_AARCH64_TRUE@@REMOTE_ONLY_FALSE@am__append_7 = Garm64-test-sve-signal Larm64-test-sve-signal   \
 @ARCH_AARCH64_TRUE@@REMOTE_ONLY_FALSE@                         aarch64-test-plt aarch64-test-frame-record
 
-@REMOTE_ONLY_FALSE@am__append_8 = Gtest-bt Ltest-bt \
+@REMOTE_ONLY_FALSE@am__append_8 = Gtest-bt Ltest-bt				 \
 @REMOTE_ONLY_FALSE@			Gtest-init Ltest-init				 \
 @REMOTE_ONLY_FALSE@			Gtest-concurrent Ltest-concurrent		 \
+@REMOTE_ONLY_FALSE@			Gtest-sig-context Ltest-sig-context		 \
 @REMOTE_ONLY_FALSE@			Gtest-trace Ltest-trace				 \
 @REMOTE_ONLY_FALSE@			Ltest-mem-validate				 \
 @REMOTE_ONLY_FALSE@			test-async-sig test-flush-cache test-init-remote \
@@ -180,7 +181,10 @@ noinst_PROGRAMS = $(am__EXEEXT_15) $(am__EXEEXT_19) $(am__EXEEXT_22)
 test_PROGRAMS = $(check_PROGRAMS) $(noinst_PROGRAMS)
 subdir = tests
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/configure.ac
+am__aclocal_m4_deps = $(top_srcdir)/m4/libtool.m4 \
+	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
+	$(top_srcdir)/m4/ltversion.m4 $(top_srcdir)/m4/lt~obsolete.m4 \
+	$(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 DIST_COMMON = $(srcdir)/Makefile.am $(noinst_HEADERS) \
@@ -195,6 +199,8 @@ am__EXEEXT_1 = test-proc-info$(EXEEXT) test-static-link$(EXEEXT) \
 @REMOTE_ONLY_FALSE@	Gtest-init$(EXEEXT) Ltest-init$(EXEEXT) \
 @REMOTE_ONLY_FALSE@	Gtest-concurrent$(EXEEXT) \
 @REMOTE_ONLY_FALSE@	Ltest-concurrent$(EXEEXT) \
+@REMOTE_ONLY_FALSE@	Gtest-sig-context$(EXEEXT) \
+@REMOTE_ONLY_FALSE@	Ltest-sig-context$(EXEEXT) \
 @REMOTE_ONLY_FALSE@	Gtest-trace$(EXEEXT) Ltest-trace$(EXEEXT) \
 @REMOTE_ONLY_FALSE@	Ltest-mem-validate$(EXEEXT) \
 @REMOTE_ONLY_FALSE@	test-async-sig$(EXEEXT) \
@@ -315,6 +321,9 @@ Gtest_resume_sig_DEPENDENCIES = $(LIBUNWIND) $(LIBUNWIND_local)
 Gtest_resume_sig_rt_SOURCES = Gtest-resume-sig-rt.c
 Gtest_resume_sig_rt_OBJECTS = Gtest-resume-sig-rt.$(OBJEXT)
 Gtest_resume_sig_rt_DEPENDENCIES = $(LIBUNWIND) $(LIBUNWIND_local)
+Gtest_sig_context_SOURCES = Gtest-sig-context.c
+Gtest_sig_context_OBJECTS = Gtest-sig-context.$(OBJEXT)
+Gtest_sig_context_DEPENDENCIES = $(LIBUNWIND)
 am_Gtest_trace_OBJECTS = Gtest-trace.$(OBJEXT) ident.$(OBJEXT)
 Gtest_trace_OBJECTS = $(am_Gtest_trace_OBJECTS)
 Gtest_trace_DEPENDENCIES = $(LIBUNWIND) $(LIBUNWIND_local)
@@ -399,6 +408,9 @@ Ltest_resume_sig_DEPENDENCIES = $(LIBUNWIND_local)
 Ltest_resume_sig_rt_SOURCES = Ltest-resume-sig-rt.c
 Ltest_resume_sig_rt_OBJECTS = Ltest-resume-sig-rt.$(OBJEXT)
 Ltest_resume_sig_rt_DEPENDENCIES = $(LIBUNWIND_local)
+Ltest_sig_context_SOURCES = Ltest-sig-context.c
+Ltest_sig_context_OBJECTS = Ltest-sig-context.$(OBJEXT)
+Ltest_sig_context_DEPENDENCIES = $(LIBUNWIND_local)
 am_Ltest_trace_OBJECTS = Ltest-trace.$(OBJEXT) ident.$(OBJEXT)
 Ltest_trace_OBJECTS = $(am_Ltest_trace_OBJECTS)
 Ltest_trace_DEPENDENCIES = $(LIBUNWIND_local)
@@ -415,7 +427,8 @@ am_aarch64_test_frame_record_OBJECTS =  \
 	aarch64-test-frame-record.$(OBJEXT)
 aarch64_test_frame_record_OBJECTS =  \
 	$(am_aarch64_test_frame_record_OBJECTS)
-aarch64_test_frame_record_DEPENDENCIES = $(LIBUNWIND)
+aarch64_test_frame_record_DEPENDENCIES = $(LIBUNWIND) \
+	$(LIBUNWIND_local)
 am_aarch64_test_plt_OBJECTS = aarch64-test-plt.$(OBJEXT)
 aarch64_test_plt_OBJECTS = $(am_aarch64_test_plt_OBJECTS)
 aarch64_test_plt_DEPENDENCIES = $(LIBUNWIND)
@@ -550,7 +563,8 @@ am__depfiles_remade =  \
 	./$(DEPDIR)/Gtest-concurrent.Po ./$(DEPDIR)/Gtest-dyn1.Po \
 	./$(DEPDIR)/Gtest-exc.Po ./$(DEPDIR)/Gtest-init.Po \
 	./$(DEPDIR)/Gtest-resume-sig-rt.Po \
-	./$(DEPDIR)/Gtest-resume-sig.Po ./$(DEPDIR)/Gtest-trace.Po \
+	./$(DEPDIR)/Gtest-resume-sig.Po \
+	./$(DEPDIR)/Gtest-sig-context.Po ./$(DEPDIR)/Gtest-trace.Po \
 	./$(DEPDIR)/Gx64-test-dwarf-expressions.Po \
 	./$(DEPDIR)/Larm64_test_sve_signal-Larm64-test-sve-signal.Po \
 	./$(DEPDIR)/Lia64-test-nat.Po ./$(DEPDIR)/Lia64-test-rbs.Po \
@@ -565,7 +579,8 @@ am__depfiles_remade =  \
 	./$(DEPDIR)/Ltest-init.Po ./$(DEPDIR)/Ltest-mem-validate.Po \
 	./$(DEPDIR)/Ltest-nocalloc.Po ./$(DEPDIR)/Ltest-nomalloc.Po \
 	./$(DEPDIR)/Ltest-resume-sig-rt.Po \
-	./$(DEPDIR)/Ltest-resume-sig.Po ./$(DEPDIR)/Ltest-trace.Po \
+	./$(DEPDIR)/Ltest-resume-sig.Po \
+	./$(DEPDIR)/Ltest-sig-context.Po ./$(DEPDIR)/Ltest-trace.Po \
 	./$(DEPDIR)/Ltest-varargs.Po \
 	./$(DEPDIR)/Lx64-test-dwarf-expressions.Po \
 	./$(DEPDIR)/aarch64-test-frame-record.Po \
@@ -642,8 +657,8 @@ SOURCES = $(Garm64_test_sve_signal_SOURCES) $(Gia64_test_nat_SOURCES) \
 	$(Gia64_test_stack_SOURCES) Gperf-simple.c Gperf-trace.c \
 	$(Gtest_bt_SOURCES) Gtest-concurrent.c $(Gtest_dyn1_SOURCES) \
 	Gtest-exc.c $(Gtest_init_SOURCES) Gtest-resume-sig.c \
-	Gtest-resume-sig-rt.c $(Gtest_trace_SOURCES) \
-	$(Gx64_test_dwarf_expressions_SOURCES) \
+	Gtest-resume-sig-rt.c Gtest-sig-context.c \
+	$(Gtest_trace_SOURCES) $(Gx64_test_dwarf_expressions_SOURCES) \
 	$(Larm64_test_sve_signal_SOURCES) $(Lia64_test_nat_SOURCES) \
 	$(Lia64_test_rbs_SOURCES) $(Lia64_test_readonly_SOURCES) \
 	$(Lia64_test_stack_SOURCES) Lperf-simple.c Lperf-trace.c \
@@ -653,7 +668,8 @@ SOURCES = $(Garm64_test_sve_signal_SOURCES) $(Gia64_test_nat_SOURCES) \
 	$(Ltest_init_local_signal_SOURCES) \
 	$(Ltest_mem_validate_SOURCES) $(Ltest_nocalloc_SOURCES) \
 	$(Ltest_nomalloc_SOURCES) Ltest-resume-sig.c \
-	Ltest-resume-sig-rt.c $(Ltest_trace_SOURCES) Ltest-varargs.c \
+	Ltest-resume-sig-rt.c Ltest-sig-context.c \
+	$(Ltest_trace_SOURCES) Ltest-varargs.c \
 	$(Lx64_test_dwarf_expressions_SOURCES) \
 	$(aarch64_test_frame_record_SOURCES) \
 	$(aarch64_test_plt_SOURCES) crasher.c forker.c \
@@ -671,7 +687,8 @@ DIST_SOURCES = $(Garm64_test_sve_signal_SOURCES) \
 	Gperf-simple.c Gperf-trace.c $(Gtest_bt_SOURCES) \
 	Gtest-concurrent.c $(Gtest_dyn1_SOURCES) Gtest-exc.c \
 	$(Gtest_init_SOURCES) Gtest-resume-sig.c Gtest-resume-sig-rt.c \
-	$(Gtest_trace_SOURCES) $(Gx64_test_dwarf_expressions_SOURCES) \
+	Gtest-sig-context.c $(Gtest_trace_SOURCES) \
+	$(Gx64_test_dwarf_expressions_SOURCES) \
 	$(Larm64_test_sve_signal_SOURCES) $(Lia64_test_nat_SOURCES) \
 	$(Lia64_test_rbs_SOURCES) $(Lia64_test_readonly_SOURCES) \
 	$(Lia64_test_stack_SOURCES) Lperf-simple.c Lperf-trace.c \
@@ -681,7 +698,8 @@ DIST_SOURCES = $(Garm64_test_sve_signal_SOURCES) \
 	$(Ltest_init_local_signal_SOURCES) \
 	$(Ltest_mem_validate_SOURCES) $(Ltest_nocalloc_SOURCES) \
 	$(Ltest_nomalloc_SOURCES) Ltest-resume-sig.c \
-	Ltest-resume-sig-rt.c $(Ltest_trace_SOURCES) Ltest-varargs.c \
+	Ltest-resume-sig-rt.c Ltest-sig-context.c \
+	$(Ltest_trace_SOURCES) Ltest-varargs.c \
 	$(Lx64_test_dwarf_expressions_SOURCES) \
 	$(aarch64_test_frame_record_SOURCES) \
 	$(aarch64_test_plt_SOURCES) crasher.c forker.c \
@@ -936,7 +954,6 @@ EGREP = @EGREP@
 ETAGS = @ETAGS@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
-FILECMD = @FILECMD@
 GREP = @GREP@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
@@ -948,7 +965,6 @@ LD = @LD@
 LDFLAGS = @LDFLAGS@
 LDFLAGS_NOSTARTFILES = @LDFLAGS_NOSTARTFILES@
 LDFLAGS_STATIC_LIBCXA = @LDFLAGS_STATIC_LIBCXA@
-LIBCRTS = @LIBCRTS@
 LIBLZMA = @LIBLZMA@
 LIBOBJS = @LIBOBJS@
 LIBS = @LIBS@
@@ -986,6 +1002,8 @@ SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
 STRIP = @STRIP@
+UNW_CRT_LDFLAGS = @UNW_CRT_LDFLAGS@
+UNW_CRT_LIBADD = @UNW_CRT_LIBADD@
 UNW_TESTDRIVER = @UNW_TESTDRIVER@
 VERSION = @VERSION@
 abs_builddir = @abs_builddir@
@@ -1123,8 +1141,8 @@ Garm64_test_sve_signal_SOURCES = Garm64-test-sve-signal.c
 Larm64_test_sve_signal_SOURCES = Larm64-test-sve-signal.c
 aarch64_test_plt_SOURCES = aarch64-test-plt.c
 aarch64_test_frame_record_SOURCES = aarch64-test-frame-record.c
-@COMPILER_SUPPORTS_MARCH_ARMV8_A_SVE_TRUE@Garm64_test_sve_signal_CFLAGS = -fno-inline -march=armv8-a+sve
-@COMPILER_SUPPORTS_MARCH_ARMV8_A_SVE_TRUE@Larm64_test_sve_signal_CFLAGS = -fno-inline -march=armv8-a+sve
+@COMPILER_SUPPORTS_MARCH_ARMV8_A_SVE_TRUE@Garm64_test_sve_signal_CFLAGS = $(AM_CFLAGS) -fno-inline -march=armv8-a+sve
+@COMPILER_SUPPORTS_MARCH_ARMV8_A_SVE_TRUE@Larm64_test_sve_signal_CFLAGS = $(AM_CFLAGS) -fno-inline -march=armv8-a+sve
 Gtest_init_SOURCES = Gtest-init.cxx
 Ltest_init_SOURCES = Ltest-init.cxx
 Ltest_cxx_exceptions_SOURCES = Ltest-cxx-exceptions.cxx
@@ -1172,6 +1190,7 @@ Gtest_exc_LDADD = $(LIBUNWIND) $(LIBUNWIND_local)
 Gtest_init_LDADD = $(LIBUNWIND) $(LIBUNWIND_local) $(BACKTRACELIB)
 Gtest_resume_sig_LDADD = $(LIBUNWIND) $(LIBUNWIND_local)
 Gtest_resume_sig_rt_LDADD = $(LIBUNWIND) $(LIBUNWIND_local)
+Gtest_sig_context_LDADD = $(LIBUNWIND) 
 Gperf_simple_LDADD = $(LIBUNWIND) $(LIBUNWIND_local)
 Gtest_trace_LDADD = $(LIBUNWIND) $(LIBUNWIND_local)
 Gperf_trace_LDADD = $(LIBUNWIND) $(LIBUNWIND_local)
@@ -1185,6 +1204,7 @@ Ltest_nomalloc_LDADD = $(LIBUNWIND_local) $(DLLIB)
 Ltest_nocalloc_LDADD = $(LIBUNWIND_local) $(DLLIB) $(PTHREADS_LIB)
 Ltest_resume_sig_LDADD = $(LIBUNWIND_local)
 Ltest_resume_sig_rt_LDADD = $(LIBUNWIND_local)
+Ltest_sig_context_LDADD = $(LIBUNWIND_local)
 Lperf_simple_LDADD = $(LIBUNWIND_local)
 Ltest_trace_LDADD = $(LIBUNWIND_local)
 Lperf_trace_LDADD = $(LIBUNWIND_local)
@@ -1209,7 +1229,7 @@ Lx64_test_dwarf_expressions_LDADD = $(LIBUNWIND_local)
 Garm64_test_sve_signal_LDADD = $(LIBUNWIND) $(LIBUNWIND_local)
 Larm64_test_sve_signal_LDADD = $(LIBUNWIND_local)
 aarch64_test_plt_LDADD = $(LIBUNWIND)
-aarch64_test_frame_record_LDADD = $(LIBUNWIND)
+aarch64_test_frame_record_LDADD = $(LIBUNWIND) $(LIBUNWIND_local)
 all: all-am
 
 .SUFFIXES:
@@ -1369,6 +1389,10 @@ Gtest-resume-sig-rt$(EXEEXT): $(Gtest_resume_sig_rt_OBJECTS) $(Gtest_resume_sig_
 	@rm -f Gtest-resume-sig-rt$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(Gtest_resume_sig_rt_OBJECTS) $(Gtest_resume_sig_rt_LDADD) $(LIBS)
 
+Gtest-sig-context$(EXEEXT): $(Gtest_sig_context_OBJECTS) $(Gtest_sig_context_DEPENDENCIES) $(EXTRA_Gtest_sig_context_DEPENDENCIES) 
+	@rm -f Gtest-sig-context$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(Gtest_sig_context_OBJECTS) $(Gtest_sig_context_LDADD) $(LIBS)
+
 Gtest-trace$(EXEEXT): $(Gtest_trace_OBJECTS) $(Gtest_trace_DEPENDENCIES) $(EXTRA_Gtest_trace_DEPENDENCIES) 
 	@rm -f Gtest-trace$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(Gtest_trace_OBJECTS) $(Gtest_trace_LDADD) $(LIBS)
@@ -1456,6 +1480,10 @@ Ltest-resume-sig$(EXEEXT): $(Ltest_resume_sig_OBJECTS) $(Ltest_resume_sig_DEPEND
 Ltest-resume-sig-rt$(EXEEXT): $(Ltest_resume_sig_rt_OBJECTS) $(Ltest_resume_sig_rt_DEPENDENCIES) $(EXTRA_Ltest_resume_sig_rt_DEPENDENCIES) 
 	@rm -f Ltest-resume-sig-rt$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(Ltest_resume_sig_rt_OBJECTS) $(Ltest_resume_sig_rt_LDADD) $(LIBS)
+
+Ltest-sig-context$(EXEEXT): $(Ltest_sig_context_OBJECTS) $(Ltest_sig_context_DEPENDENCIES) $(EXTRA_Ltest_sig_context_DEPENDENCIES) 
+	@rm -f Ltest-sig-context$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(Ltest_sig_context_OBJECTS) $(Ltest_sig_context_LDADD) $(LIBS)
 
 Ltest-trace$(EXEEXT): $(Ltest_trace_OBJECTS) $(Ltest_trace_DEPENDENCIES) $(EXTRA_Ltest_trace_DEPENDENCIES) 
 	@rm -f Ltest-trace$(EXEEXT)
@@ -1616,6 +1644,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/Gtest-init.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/Gtest-resume-sig-rt.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/Gtest-resume-sig.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/Gtest-sig-context.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/Gtest-trace.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/Gx64-test-dwarf-expressions.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/Larm64_test_sve_signal-Larm64-test-sve-signal.Po@am__quote@ # am--include-marker
@@ -1639,6 +1668,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/Ltest-nomalloc.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/Ltest-resume-sig-rt.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/Ltest-resume-sig.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/Ltest-sig-context.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/Ltest-trace.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/Ltest-varargs.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/Lx64-test-dwarf-expressions.Po@am__quote@ # am--include-marker
@@ -2040,6 +2070,20 @@ Gtest-concurrent.log: Gtest-concurrent$(EXEEXT)
 Ltest-concurrent.log: Ltest-concurrent$(EXEEXT)
 	@p='Ltest-concurrent$(EXEEXT)'; \
 	b='Ltest-concurrent'; \
+	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
+	--log-file $$b.log --trs-file $$b.trs \
+	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
+	"$$tst" $(AM_TESTS_FD_REDIRECT)
+Gtest-sig-context.log: Gtest-sig-context$(EXEEXT)
+	@p='Gtest-sig-context$(EXEEXT)'; \
+	b='Gtest-sig-context'; \
+	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
+	--log-file $$b.log --trs-file $$b.trs \
+	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
+	"$$tst" $(AM_TESTS_FD_REDIRECT)
+Ltest-sig-context.log: Ltest-sig-context$(EXEEXT)
+	@p='Ltest-sig-context$(EXEEXT)'; \
+	b='Ltest-sig-context'; \
 	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
 	--log-file $$b.log --trs-file $$b.trs \
 	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
@@ -2491,6 +2535,7 @@ distclean: distclean-am
 	-rm -f ./$(DEPDIR)/Gtest-init.Po
 	-rm -f ./$(DEPDIR)/Gtest-resume-sig-rt.Po
 	-rm -f ./$(DEPDIR)/Gtest-resume-sig.Po
+	-rm -f ./$(DEPDIR)/Gtest-sig-context.Po
 	-rm -f ./$(DEPDIR)/Gtest-trace.Po
 	-rm -f ./$(DEPDIR)/Gx64-test-dwarf-expressions.Po
 	-rm -f ./$(DEPDIR)/Larm64_test_sve_signal-Larm64-test-sve-signal.Po
@@ -2514,6 +2559,7 @@ distclean: distclean-am
 	-rm -f ./$(DEPDIR)/Ltest-nomalloc.Po
 	-rm -f ./$(DEPDIR)/Ltest-resume-sig-rt.Po
 	-rm -f ./$(DEPDIR)/Ltest-resume-sig.Po
+	-rm -f ./$(DEPDIR)/Ltest-sig-context.Po
 	-rm -f ./$(DEPDIR)/Ltest-trace.Po
 	-rm -f ./$(DEPDIR)/Ltest-varargs.Po
 	-rm -f ./$(DEPDIR)/Lx64-test-dwarf-expressions.Po
@@ -2609,6 +2655,7 @@ maintainer-clean: maintainer-clean-am
 	-rm -f ./$(DEPDIR)/Gtest-init.Po
 	-rm -f ./$(DEPDIR)/Gtest-resume-sig-rt.Po
 	-rm -f ./$(DEPDIR)/Gtest-resume-sig.Po
+	-rm -f ./$(DEPDIR)/Gtest-sig-context.Po
 	-rm -f ./$(DEPDIR)/Gtest-trace.Po
 	-rm -f ./$(DEPDIR)/Gx64-test-dwarf-expressions.Po
 	-rm -f ./$(DEPDIR)/Larm64_test_sve_signal-Larm64-test-sve-signal.Po
@@ -2632,6 +2679,7 @@ maintainer-clean: maintainer-clean-am
 	-rm -f ./$(DEPDIR)/Ltest-nomalloc.Po
 	-rm -f ./$(DEPDIR)/Ltest-resume-sig-rt.Po
 	-rm -f ./$(DEPDIR)/Ltest-resume-sig.Po
+	-rm -f ./$(DEPDIR)/Ltest-sig-context.Po
 	-rm -f ./$(DEPDIR)/Ltest-trace.Po
 	-rm -f ./$(DEPDIR)/Ltest-varargs.Po
 	-rm -f ./$(DEPDIR)/Lx64-test-dwarf-expressions.Po

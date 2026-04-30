@@ -3,28 +3,27 @@
 ## Source
 
 - Repository: https://github.com/DataDog/libunwind.git
-- Branch: kevin/v1.8.1-custom-2
-- Vendored commit: cc1d07281b9e034c9e088733aeb4b94ffd91db9e
-- Vendor date: 2026-04-08
+- Branch: kevin/v1.8.3-custom-1
+- Vendored commit: eb3f9eac177869d9dd6d10431e3b6340bd9978df 
+- Vendor date: 2026-04-30
 
 ## Upstream base
 
-- Upstream tag: v1.8.1 (commit 9cc4d98b22ae57bc1d8c253988feb85d4298a634)
+- Upstream tag: v1.8.3 (commit 44aa1a5be2ca68825a17acdf534be4d25cff09b3)
 - Upstream repository: https://github.com/libunwind/libunwind
 
-## Datadog-specific commits (v1.8.1..HEAD)
+## Datadog-specific commits (v1.8.3..HEAD)
 
 | Commit | Message |
 |--------|---------|
-| e8e49548 | Copy context before calling slow_backtrace to avoid using a potential modified context |
-| cb4b4698 | Revert "Rework register load in aarch64_local_resume()" |
-| cc1d0728 | Set image to null when invalid |
+| eb3f9eac | Add unw_get_cursor_snapshot API |
+| df2e2c45 | Fix get_frame_state for different layout of assembly code |
 
-To review the diff against upstream v1.8.1, run in a clone of
+To review the diff against upstream v1.8.3, run in a clone of
 https://github.com/DataDog/libunwind.git:
 
 ```
-git diff v1.8.1 cc1d0728 -- src/ include/
+git diff v1.8.3 cc1d0728 -- src/ include/
 ```
 
 ## Autotools-generated files

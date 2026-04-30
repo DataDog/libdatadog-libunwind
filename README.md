@@ -62,3 +62,27 @@ cargo build
 
 
 All other targets produce an empty crate (the build script and bindings are gated on `target_os = "linux"`).
+
+## How to publish
+
+1. **Bump the version** in `Cargo.toml` and merge the change to `main`.
+
+2. **Tag the release commit** on `main`:
+
+   ```sh
+   git checkout main && git pull
+   git tag v<version>          # e.g. git tag v1.1.0
+   git push origin v<version>
+   ```
+
+3. **Wait for CI** — the tag push triggers a pipeline that runs all four
+   build+test configurations (CentOS and Alpine, x86\_64 and aarch64).
+
+4. **Trigger the publish job** — once all test jobs are green, a manual
+   `publish_crate` job appears in the pipeline.  Click ▶ to publish to
+   crates.io.
+
+The publish job validates that the tag version matches `Cargo.toml`, that
+the tagged commit is on `main`, and does a `--dry-run` before the real
+publish.  If the version is already on crates.io the job exits cleanly
+without error.

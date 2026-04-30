@@ -1,11 +1,12 @@
 // Copyright 2025-Present Datadog, Inc. https://www.datadoghq.com/
 // SPDX-License-Identifier: Apache-2.0
 
+use std::arch::global_asm;
+
 pub type UnwContext = libc::ucontext_t;
 
 pub type UnwWord = u64;
 
-// Opaque cursor structure
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct UnwCursor {
@@ -22,6 +23,7 @@ pub struct UnwAccessors;
 extern "C" {
     #[link_name = "_ULaarch64_init_local2"]
     pub fn unw_init_local2(cursor: *mut UnwCursor, context: *mut UnwContext, flag: i32) -> i32;
+    pub fn unw_getcontext(context: *mut UnwContext) -> i32;
     #[link_name = "_ULaarch64_step"]
     pub fn unw_step(cursor: *mut UnwCursor) -> i32;
     #[link_name = "_ULaarch64_get_reg"]
@@ -75,46 +77,49 @@ extern "C" {
 pub const UNW_REG_IP: i32 = 30; // Instruction Pointer
 pub const UNW_REG_SP: i32 = 31; // Stack Pointer
 pub const UNW_REG_FP: i32 = 29; // Frame Pointer
-pub const UNW_INIT_LOCAL_ONLY_IP: i32 = 1;
+pub const UNW_INIT_SIGNAL_FRAME: i32 = 1;
 
-/// Saves the current CPU context into `uc_mcontext.regs`.
-/// On aarch64 libunwind does not emit a callable symbol for getcontext —
-/// it uses a C preprocessor macro with inline assembly. This is the Rust
-/// equivalent: save all GPRs, SP, LR, and PC into `uc_mcontext`.
-///
-/// # Safety
-/// `context` must be a valid, non-null pointer to a zeroed or initialized `UnwContext`.
-// This is only for testing purposes and allow the tests to work with libc and musl-libc
-#[cfg(test)]
-#[inline(always)]
-pub unsafe fn getcontext(context: *mut UnwContext) -> i32 {
-    let base = core::ptr::addr_of_mut!((*context).uc_mcontext.regs) as u64;
-    let ret: u64;
-    core::arch::asm!(
-        "stp x0, x1, [x0, #0]",
-        "stp x2, x3, [x0, #16]",
-        "stp x4, x5, [x0, #32]",
-        "stp x6, x7, [x0, #48]",
-        "stp x8, x9, [x0, #64]",
-        "stp x10, x11, [x0, #80]",
-        "stp x12, x13, [x0, #96]",
-        "stp x14, x15, [x0, #112]",
-        "stp x16, x17, [x0, #128]",
-        "stp x18, x19, [x0, #144]",
-        "stp x20, x21, [x0, #160]",
-        "stp x22, x23, [x0, #176]",
-        "stp x24, x25, [x0, #192]",
-        "stp x26, x27, [x0, #208]",
-        "stp x28, x29, [x0, #224]",
-        "mov x1, sp",
-        "stp x30, x1, [x0, #240]",
-        "adr x1, 2f",
-        "str x1, [x0, #256]",
-        "mov x0, #0",
-        "2:",
-        inout("x0") base => ret,
-        out("x1") _,
-        options(nostack, preserves_flags),
-    );
-    ret as i32
-}
+// On aarch64, libunwind's unw_getcontext is a C inline-asm macro (in
+// libunwind-aarch64.h), not an exported symbol. Provide a callable function
+// that does the same thing: saves all GPRs, SP, and PC into a ucontext_t,
+// then returns 0.
+//
+// Offsets from ucontext_i.h (Linux aarch64):
+//   UC_MCONTEXT_OFF = 0xb0
+//   SC_GPR_OFF      = 0x08   (regs[0] within mcontext)
+//   SC_SP_OFF       = 0x100
+//   SC_PC_OFF       = 0x108
+//
+// GPR base = UC_MCONTEXT_OFF + SC_GPR_OFF = 0xb8
+// Register xN is at GPR base + N*8
+global_asm!(
+    ".global unw_getcontext",
+    ".type unw_getcontext, @function",
+    "unw_getcontext:",
+    ".cfi_startproc",
+    "stp  x0,  x1, [x0, #0xb8]",
+    "stp  x2,  x3, [x0, #0xc8]",
+    "stp  x4,  x5, [x0, #0xd8]",
+    "stp  x6,  x7, [x0, #0xe8]",
+    "stp  x8,  x9, [x0, #0xf8]",
+    "stp x10, x11, [x0, #0x108]",
+    "stp x12, x13, [x0, #0x118]",
+    "stp x14, x15, [x0, #0x128]",
+    "stp x16, x17, [x0, #0x138]",
+    "stp x18, x19, [x0, #0x148]",
+    "stp x20, x21, [x0, #0x158]",
+    "stp x22, x23, [x0, #0x168]",
+    "stp x24, x25, [x0, #0x178]",
+    "stp x26, x27, [x0, #0x188]",
+    "stp x28, x29, [x0, #0x198]",
+    "str  x30,     [x0, #0x1a8]",
+    // SP (exclude this call frame) and PC (return address)
+    "mov  x9, sp",
+    "str  x9,  [x0, #0x1b0]",
+    "str  x30, [x0, #0x1b8]",
+    "mov  x0, #0",
+    "ret",
+    ".cfi_endproc",
+    ".size unw_getcontext, . - unw_getcontext",
+);
+

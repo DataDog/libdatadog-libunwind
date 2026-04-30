@@ -216,12 +216,12 @@ mod tests {
     fn test_basic_unwind() {
         unsafe {
             let mut context: UnwContext = std::mem::zeroed();
-            let mut cursor: UnwCursor = std::mem::zeroed();
 
-            let ret = getcontext(&mut context);
-            assert_eq!(ret, 0, "getcontext failed");
+            let ret = unw_getcontext(&mut context);
+            assert_eq!(ret, 0, "unw_getcontext failed");
 
             // Initialize cursor
+            let mut cursor: UnwCursor = std::mem::zeroed();
             let ret = unw_init_local2(&mut cursor, &mut context, 0);
             assert_eq!(ret, 0, "unw_init_local2 failed");
 
@@ -250,9 +250,9 @@ mod tests {
     fn test_get_register() {
         unsafe {
             let mut context: UnwContext = std::mem::zeroed();
-            let mut cursor: UnwCursor = std::mem::zeroed();
+            assert_eq!(unw_getcontext(&mut context), 0);
 
-            assert_eq!(getcontext(&mut context), 0);
+            let mut cursor: UnwCursor = std::mem::zeroed();
             assert_eq!(unw_init_local2(&mut cursor, &mut context, 0), 0);
 
             // Get instruction pointer
@@ -274,7 +274,9 @@ mod tests {
     fn test_backtrace2() {
         unsafe {
             let mut context: UnwContext = std::mem::zeroed();
-            assert_eq!(getcontext(&mut context), 0);
+            assert_eq!(unw_getcontext(&mut context), 0);
+            let mut cursor: UnwCursor = std::mem::zeroed();
+            assert_eq!(unw_init_local2(&mut cursor, &mut context, 0), 0);
 
             // unw_backtrace2 expects an array of void pointers
             let mut frames: [*mut ::std::os::raw::c_void; 100] = [std::ptr::null_mut(); 100];
@@ -299,11 +301,10 @@ mod tests {
     fn test_get_proc_name() {
         unsafe {
             let mut context: UnwContext = std::mem::zeroed();
+            assert_eq!(unw_getcontext(&mut context), 0);
             let mut cursor: UnwCursor = std::mem::zeroed();
-
-            assert_eq!(getcontext(&mut context), 0);
             assert_eq!(
-                unw_init_local2(&mut cursor, &mut context, UNW_INIT_LOCAL_ONLY_IP),
+                unw_init_local2(&mut cursor, &mut context, UNW_INIT_SIGNAL_FRAME),
                 0
             );
 

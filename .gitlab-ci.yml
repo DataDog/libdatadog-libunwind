@@ -12,20 +12,22 @@ stages:
 variables:
   BASE_IMAGE_CENTOS: registry.ddbuild.io/images/mirror/centos:centos7
   BASE_IMAGE_ALPINE: registry.ddbuild.io/images/mirror/alpine:3.22.0
+  BASE_IMAGE_UBUNTU: registry.ddbuild.io/images/mirror/ubuntu:24.04
 
   # To update the build images:
-  # 1. Edit centos.Dockerfile or alpine.Dockerfile and push to your branch
+  # 1. Edit centos.Dockerfile, alpine.Dockerfile, or ubuntu.Dockerfile and push to your branch
   # 2. Trigger the manual docker_build_job in your branch (uses CI_IMAGE_CURRENT_BUILD_VERSION)
   #    Important: build both OS variants — they share the same version number
   # 3. Bump CI_IMAGE_STICKY_VERSION to the value of CI_IMAGE_CURRENT_BUILD_VERSION
   # 4. Bump CI_IMAGE_CURRENT_BUILD_VERSION to current value + 1
   # 5. Push, get a review, merge
-  CI_IMAGE_STICKY_VERSION: 5
-  CI_IMAGE_CURRENT_BUILD_VERSION: 6
+  CI_IMAGE_STICKY_VERSION: 6
+  CI_IMAGE_CURRENT_BUILD_VERSION: 7
 
   PUSH_PREFIX: registry.ddbuild.io/ci/libdatadog-libunwind:dependencies
   BUILD_IMAGE_CENTOS: registry.ddbuild.io/ci/libdatadog-libunwind:dependencies_centos_${CI_IMAGE_STICKY_VERSION}
   BUILD_IMAGE_ALPINE: registry.ddbuild.io/ci/libdatadog-libunwind:dependencies_alpine_${CI_IMAGE_STICKY_VERSION}
+  BUILD_IMAGE_UBUNTU: registry.ddbuild.io/ci/libdatadog-libunwind:dependencies_ubuntu_${CI_IMAGE_STICKY_VERSION}
 
   KUBERNETES_SERVICE_ACCOUNT_OVERWRITE: libdatadog-libunwind
   RUST_BACKTRACE: 1
@@ -50,7 +52,7 @@ docker_build_job:
   tags: ["arch:amd64"]
   parallel:
     matrix:
-      - OS_NAME: ["centos", "alpine"]
+      - OS_NAME: ["centos", "alpine", "ubuntu"]
         FQ_ARCH: "amd64"
   image: registry.ddbuild.io/docker:20.10.3
   id_tokens:
@@ -135,6 +137,16 @@ docker_build_job:
     KUBERNETES_CPU_LIMIT: 4
     KUBERNETES_MEMORY_REQUEST: 4Gi
     KUBERNETES_MEMORY_LIMIT: 4Gi
+
+.on_ubuntu_amd_runner: &on_ubuntu_amd_runner
+  image: ${BUILD_IMAGE_UBUNTU}
+  tags: ["arch:amd64"]
+  variables:
+    OS_NAME: ubuntu
+    KUBERNETES_CPU_REQUEST: 1
+    KUBERNETES_CPU_LIMIT: 2
+    KUBERNETES_MEMORY_REQUEST: 1Gi
+    KUBERNETES_MEMORY_LIMIT: 2Gi
 
 # Job templates
 #
@@ -224,7 +236,7 @@ test_rust_on_alpine_arm64:
 # Publish step
 
 publish_crate:
-  <<: *on_centos_amd_runner
+  <<: *on_ubuntu_amd_runner
   stage: publish
   # Appears in the pipeline for any version tag (v1.2.3) but requires a
   # manual click to actually publish.  Push the tag on the branch you want
@@ -257,16 +269,9 @@ publish_crate:
       exit 0
     fi
 
-    # 3. Install AWS CLI
-    yum install -y --setopt=tsflags=nodocs --nogpgcheck unzip
-    ARCH=$(uname -m)   # x86_64 or aarch64
-    curl -sSL "https://awscli.amazonaws.com/awscli-exe-linux-${ARCH}.zip" -o /tmp/awscliv2.zip
-    unzip -q /tmp/awscliv2.zip -d /tmp/awscli
-    /tmp/awscli/aws/install -i /opt/aws-cli -b /tmp/aws-bin
-
-    # 4. Fetch crates.io token from AWS SSM.
+    # 3. Fetch crates.io token from AWS SSM.
     set +x
-    CARGO_REGISTRY_TOKEN=$(/tmp/aws-bin/aws ssm get-parameter \
+    CARGO_REGISTRY_TOKEN=$(aws ssm get-parameter \
       --region us-east-1 \
       --name "ci.libdatadog-libunwind.cratesio-token" \
       --with-decryption \
@@ -275,10 +280,10 @@ publish_crate:
     export CARGO_REGISTRY_TOKEN
     set -x
 
-    # 5. Dry-run.
+    # 4. Dry-run.
     cargo publish --dry-run --locked
     echo "dry-run passed"
 
-    # 6. Publish.
-    # cargo publish --locked
-    # echo "published ${CRATE_NAME} ${VERSION} to crates.io"
+    # 5. Publish.
+    cargo publish --locked
+    echo "published ${CRATE_NAME} ${VERSION} to crates.io"

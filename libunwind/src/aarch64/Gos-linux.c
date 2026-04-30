@@ -2,6 +2,7 @@
    Copyright (C) 2008 CodeSourcery
    Copyright (C) 2011-2013 Linaro Limited
    Copyright (C) 2012 Tommi Rantala <tt.rantala@gmail.com>
+   Copyright 2024 Stephen M. Webb  <swebb@blackberry.com>
 
 This file is part of libunwind.
 
@@ -28,69 +29,78 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
 
 #ifndef UNW_REMOTE_ONLY
 
-HIDDEN inline int
+/* Magic constants generated from gen-offsets.c */
+#define SC_R0_OFF   "8"
+#define SC_R2_OFF   "24"
+#define SC_R18_OFF  "152"
+#define SC_R20_OFF  "168"
+#define SC_R22_OFF  "184"
+#define SC_R24_OFF  "200"
+#define SC_R26_OFF  "216"
+#define SC_R28_OFF  "232"
+#define SC_R30_OFF  "248"
+
+#define FP_R08_OFF "80"
+#define FP_R09_OFF "88"
+#define FP_R10_OFF "96"
+#define FP_R11_OFF "104"
+#define FP_R12_OFF "112"
+#define FP_R13_OFF "120"
+#define FP_R14_OFF "128"
+#define FP_R15_OFF "136"
+
+#define SC_SP_OFF   "0x100"
+
+HIDDEN int
 aarch64_local_resume (unw_addr_space_t as, unw_cursor_t *cursor, void *arg)
 {
-#ifdef __linux__
   struct cursor *c = (struct cursor *) cursor;
-  unw_tdep_context_t *uc = c->uc;
+  unw_context_t *uc = c->uc;
 
   if (c->sigcontext_format == AARCH64_SCF_NONE)
     {
+
+      /*
+       * This is effectively the old POSIX setcontext().
+       *
+       * This inline asm is broken up to use local scratch registers for the
+       * uc_mcontext.regs and FPCTX base addresses because newer versions of GCC
+       * and clang barf on too many constraints (gh-702) when the C array
+       * elements are used directly.
+       *
+       * Clobbers aren't required for the inline asm because they just convince
+       * the compiler to save those registers and they never get restored
+       * becauise the asm ends with a plain ol' ret.
+       */
+      register void* uc_mcontext __asm__ ("x5") = (void*) &uc->uc_mcontext;
+      register void* fpctx __asm__ ("x4") = (void*) GET_FPCTX(uc);
+
       /* Since there are no signals involved here we restore EH and non scratch
          registers only.  */
-      unsigned long regs[24];
-      regs[0] = uc->uc_mcontext.regs[0];
-      regs[1] = uc->uc_mcontext.regs[1];
-      regs[2] = uc->uc_mcontext.regs[2];
-      regs[3] = uc->uc_mcontext.regs[3];
-      regs[4] = uc->uc_mcontext.regs[19];
-      regs[5] = uc->uc_mcontext.regs[20];
-      regs[6] = uc->uc_mcontext.regs[21];
-      regs[7] = uc->uc_mcontext.regs[22];
-      regs[8] = uc->uc_mcontext.regs[23];
-      regs[9] = uc->uc_mcontext.regs[24];
-      regs[10] = uc->uc_mcontext.regs[25];
-      regs[11] = uc->uc_mcontext.regs[26];
-      regs[12] = uc->uc_mcontext.regs[27];
-      regs[13] = uc->uc_mcontext.regs[28];
-      regs[14] = uc->uc_mcontext.regs[29]; /* FP */
-      regs[15] = uc->uc_mcontext.regs[30]; /* LR */
-      regs[16] = GET_FPCTX(uc)->vregs[8];
-      regs[17] = GET_FPCTX(uc)->vregs[9];
-      regs[18] = GET_FPCTX(uc)->vregs[10];
-      regs[19] = GET_FPCTX(uc)->vregs[11];
-      regs[20] = GET_FPCTX(uc)->vregs[12];
-      regs[21] = GET_FPCTX(uc)->vregs[13];
-      regs[22] = GET_FPCTX(uc)->vregs[14];
-      regs[23] = GET_FPCTX(uc)->vregs[15];
-      unsigned long sp = uc->uc_mcontext.sp;
-
-      struct regs_overlay {
-        char x[sizeof(regs)];
-      };
-
       __asm__ __volatile__ (
-        "mov x4, %0\n"
-        "mov x5, %1\n"
-        "ldp x0,  x1,  [x4]\n"
-        "ldp x2,  x3,  [x4,16]\n"
-        "ldp x19, x20, [x4,32]\n"
-        "ldp x21, x22, [x4,48]\n"
-        "ldp x23, x24, [x4,64]\n"
-        "ldp x25, x26, [x4,80]\n"
-        "ldp x27, x28, [x4,96]\n"
-        "ldp x29, x30, [x4,112]\n"
-        "ldp d8, d9,   [x4,128]\n"
-        "ldp d10, d11, [x4,144]\n"
-        "ldp d12, d13, [x4,160]\n"
-        "ldp d14, d15, [x4,176]\n"
-        "mov sp, x5\n"
-        "ret \n"
-        :
-        : "r" (regs),
-          "r" (sp),
-          "m" (*(struct regs_overlay *)regs)
+        "ldp x0,  x1,  [x5, " SC_R0_OFF  "]\n\t"
+        "ldp x2,  x3,  [x5, " SC_R2_OFF  "]\n\t"
+        "ldp x18, x19, [x5, " SC_R18_OFF "]\n\t"
+        "ldp x20, x21, [x5, " SC_R20_OFF "]\n\t"
+        "ldp x22, x23, [x5, " SC_R22_OFF "]\n\t"
+        "ldp x24, x25, [x5, " SC_R24_OFF "]\n\t"
+        "ldp x26, x27, [x5, " SC_R26_OFF "]\n\t"
+        "ldp x28, x29, [x5, " SC_R28_OFF "]\n\t"
+        "ldr x30, [x5, " SC_R30_OFF "]\n\t"
+        "ldr d8,  [x4, " FP_R08_OFF "]\n\t"
+        "ldr d9,  [x4, " FP_R09_OFF "]\n\t"
+        "ldr d10, [x4, " FP_R10_OFF "]\n\t"
+        "ldr d11, [x4, " FP_R11_OFF "]\n\t"
+        "ldr d12, [x4, " FP_R12_OFF "]\n\t"
+        "ldr d13, [x4, " FP_R13_OFF "]\n\t"
+        "ldr d14, [x4, " FP_R14_OFF "]\n\t"
+        "ldr d15, [x4, " FP_R15_OFF "]\n\t"
+        "ldr x5,  [x5, " SC_SP_OFF "]\n\t"
+        "mov sp, x5\n\t"
+        "ret\n"
+        : 
+        : [uc_mcontext] "r"(uc_mcontext),
+          [fpctx] "r"(fpctx)
       );
     }
   else
@@ -140,9 +150,6 @@ aarch64_local_resume (unw_addr_space_t as, unw_cursor_t *cursor, void *arg)
       );
    }
   unreachable();
-#else
-  printf ("%s: implement me\n", __FUNCTION__);
-#endif
   return -UNW_EINVAL;
 }
 

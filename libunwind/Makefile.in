@@ -111,7 +111,10 @@ target_triplet = @target@
 @CONFIG_DOCS_TRUE@am__append_20 = doc
 subdir = .
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/configure.ac
+am__aclocal_m4_deps = $(top_srcdir)/m4/libtool.m4 \
+	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
+	$(top_srcdir)/m4/ltversion.m4 $(top_srcdir)/m4/lt~obsolete.m4 \
+	$(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 DIST_COMMON = $(srcdir)/Makefile.am $(top_srcdir)/configure \
@@ -315,7 +318,6 @@ EGREP = @EGREP@
 ETAGS = @ETAGS@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
-FILECMD = @FILECMD@
 GREP = @GREP@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
@@ -327,7 +329,6 @@ LD = @LD@
 LDFLAGS = @LDFLAGS@
 LDFLAGS_NOSTARTFILES = @LDFLAGS_NOSTARTFILES@
 LDFLAGS_STATIC_LIBCXA = @LDFLAGS_STATIC_LIBCXA@
-LIBCRTS = @LIBCRTS@
 LIBLZMA = @LIBLZMA@
 LIBOBJS = @LIBOBJS@
 LIBS = @LIBS@
@@ -365,6 +366,8 @@ SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
 STRIP = @STRIP@
+UNW_CRT_LDFLAGS = @UNW_CRT_LDFLAGS@
+UNW_CRT_LIBADD = @UNW_CRT_LIBADD@
 UNW_TESTDRIVER = @UNW_TESTDRIVER@
 VERSION = @VERSION@
 abs_builddir = @abs_builddir@

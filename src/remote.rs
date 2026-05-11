@@ -13,7 +13,9 @@ use crate::unw_destroy_addr_space;
 use crate::UnwAccessors;
 use crate::UnwAddrSpaceT;
 
-/// Opaque ptrace unwind handle
+/// Owning handle for the opaque pointer returned by [`_UPT_create`](crate::_UPT_create).
+///
+/// This is not a view over foreign memory: dropping the value calls [`_UPT_destroy`](crate::_UPT_destroy).
 pub struct UptInfo(NonNull<libc::c_void>);
 
 impl UptInfo {
@@ -36,7 +38,9 @@ impl Drop for UptInfo {
     }
 }
 
-/// Remote unwind address space using `_UPT_accessors`
+/// Owning remote unwind address space (from [`unw_create_addr_space`](crate::unw_create_addr_space) with [`_UPT_accessors`](crate::_UPT_accessors)).
+///
+/// Dropping calls [`unw_destroy_addr_space`](crate::unw_destroy_addr_space); this is not a non-owning handle.
 pub struct UnwAddrSpace(NonNull<libc::c_void>);
 
 impl UnwAddrSpace {
@@ -61,7 +65,9 @@ impl Drop for UnwAddrSpace {
     }
 }
 
-/// Address space + ptrace info for `unw_init_remote`
+/// Owns the ptrace unwind info and address space used with [`unw_init_remote`](crate::unw_init_remote).
+///
+/// Dropping runs each type’s destructor (see [`UptInfo`] and [`UnwAddrSpace`]); field order matches the teardown order shown in the libunwind ptrace example.
 pub struct RemoteUnwindResources {
     upt: UptInfo,
     addr_space: UnwAddrSpace,

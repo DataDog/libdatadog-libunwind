@@ -122,4 +122,3 @@ global_asm!(
     ".cfi_endproc",
     ".size unw_getcontext, . - unw_getcontext",
 );
-

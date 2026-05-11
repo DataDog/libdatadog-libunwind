@@ -12,7 +12,22 @@ pub use libunwind_aarch64::*;
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 pub use libunwind_x86_64::*;
 
-#[cfg(all(test, target_os = "linux"))]
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+))]
+mod remote;
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+))]
+pub use remote::{RemoteUnwindResources, UnwAddrSpace, UptInfo};
+
+#[cfg(all(
+    test,
+    target_os = "linux",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+))]
 mod remote_tests {
     use super::*;
 
@@ -40,11 +55,9 @@ mod remote_tests {
             libc::waitpid(child_pid, &mut status, libc::WUNTRACED);
             assert!(libc::WIFSTOPPED(status), "child did not stop");
 
-            let addr_space =
-                unw_create_addr_space(std::ptr::addr_of!(_UPT_accessors) as *mut UnwAccessors, 0);
-            let upt_info = _UPT_create(child_pid);
+            let resources = RemoteUnwindResources::new(child_pid).expect("remote unwind resources");
             let mut cursor: UnwCursor = std::mem::zeroed();
-            let ret = unw_init_remote(&mut cursor, addr_space, upt_info);
+            let ret = unw_init_remote(&mut cursor, resources.addr_space(), resources.upt());
             assert_eq!(ret, 0, "unw_init_remote failed");
 
             let mut frames = 0usize;
@@ -72,8 +85,7 @@ mod remote_tests {
             }
             assert!(frames > 0, "expected at least one remote frame");
 
-            _UPT_destroy(upt_info);
-            unw_destroy_addr_space(addr_space);
+            drop(resources);
             libc::kill(child_pid, libc::SIGKILL);
             libc::waitpid(child_pid, std::ptr::null_mut(), 0);
         }
@@ -140,13 +152,10 @@ mod remote_tests {
                 }
 
                 // Walk the parent thread's stack.
-                let addr_space = unw_create_addr_space(
-                    std::ptr::addr_of!(_UPT_accessors) as *mut UnwAccessors,
-                    0,
-                );
-                let upt_info = _UPT_create(parent_tid);
+                let resources =
+                    RemoteUnwindResources::new(parent_tid).expect("remote unwind resources");
                 let mut cursor: UnwCursor = std::mem::zeroed();
-                let ret = unw_init_remote(&mut cursor, addr_space, upt_info);
+                let ret = unw_init_remote(&mut cursor, resources.addr_space(), resources.upt());
 
                 let mut frames = 0usize;
                 if ret == 0 {
@@ -179,8 +188,7 @@ mod remote_tests {
                 }
                 assert!(frames > 0, "Expected at least one remote frame");
 
-                _UPT_destroy(upt_info);
-                unw_destroy_addr_space(addr_space);
+                drop(resources);
                 libc::ptrace(
                     libc::PTRACE_DETACH,
                     parent_tid,

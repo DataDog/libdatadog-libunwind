@@ -57,7 +57,7 @@ mod remote_tests {
 
             let resources = RemoteUnwindResources::new(child_pid).expect("remote unwind resources");
             let mut cursor: UnwCursor = std::mem::zeroed();
-            let ret = unw_init_remote(&mut cursor, resources.addr_space(), resources.upt_arg());
+            let ret = unw_init_remote(&mut cursor, resources.addr_space(), resources.upt());
             assert_eq!(ret, 0, "unw_init_remote failed");
 
             let mut frames = 0usize;
@@ -155,7 +155,7 @@ mod remote_tests {
                 let resources =
                     RemoteUnwindResources::new(parent_tid).expect("remote unwind resources");
                 let mut cursor: UnwCursor = std::mem::zeroed();
-                let ret = unw_init_remote(&mut cursor, resources.addr_space(), resources.upt_arg());
+                let ret = unw_init_remote(&mut cursor, resources.addr_space(), resources.upt());
 
                 let mut frames = 0usize;
                 if ret == 0 {

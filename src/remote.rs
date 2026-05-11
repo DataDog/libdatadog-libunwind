@@ -80,7 +80,7 @@ impl RemoteUnwindResources {
     }
 
     #[inline]
-    pub fn upt_arg(&self) -> *mut libc::c_void {
+    pub fn upt(&self) -> *mut libc::c_void {
         self.upt.as_ptr()
     }
 }

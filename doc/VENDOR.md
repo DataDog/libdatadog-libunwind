@@ -3,9 +3,9 @@
 ## Source
 
 - Repository: https://github.com/DataDog/libunwind.git
-- Branch: kevin/v1.8.3-custom-1
-- Vendored commit: eb3f9eac177869d9dd6d10431e3b6340bd9978df 
-- Vendor date: 2026-04-30
+- Branch: taegyunkim/harden-elf-symbol-lookup
+- Vendored commit: a0c8d005076493d8c00e44af5c6c05857204772b
+- Vendor date: 2026-08-18
 
 ## Upstream base
 
@@ -16,6 +16,7 @@
 
 | Commit | Message |
 |--------|---------|
+| a0c8d005 | Fix out-of-bounds ELF symbol lookup |
 | eb3f9eac | Add unw_get_cursor_snapshot API |
 | df2e2c45 | Fix get_frame_state for different layout of assembly code |
 
@@ -23,7 +24,7 @@ To review the diff against upstream v1.8.3, run in a clone of
 https://github.com/DataDog/libunwind.git:
 
 ```
-git diff v1.8.3 cc1d0728 -- src/ include/
+git diff v1.8.3 a0c8d005 -- src/ include/
 ```
 
 ## Autotools-generated files

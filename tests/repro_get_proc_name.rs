@@ -88,12 +88,9 @@ fn compile(cc: &str, args: &[&str], output: &Path) {
 }
 
 /// Reproduces the receiver crash caused by trusting an ELF GNU hash table while
-/// resolving a remote frame name. Run explicitly because the vulnerable version
-/// terminates the test process with SIGSEGV:
-///
-/// cargo test --test repro_get_proc_name -- --ignored --nocapture
+/// resolving a remote frame name. The vulnerable version terminates the test
+/// process with SIGSEGV instead of returning an error.
 #[test]
-#[ignore = "crashes vulnerable libunwind"]
 fn corrupted_remote_elf_must_not_crash_symbol_lookup() {
     let dir = std::env::temp_dir().join(format!("libdd-libunwind-repro-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);

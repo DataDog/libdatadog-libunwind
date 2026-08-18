@@ -70,7 +70,7 @@ extern int elf_w (load_debuginfo) (const char* file, struct elf_image *ei, int i
 static inline int
 elf_w (valid_object) (const struct elf_image *ei)
 {
-  if (ei->size <= EI_VERSION)
+  if (ei->size < sizeof (Elf_W (Ehdr)))
     return 0;
 
   return (memcmp (ei->image, ELFMAG, SELFMAG) == 0

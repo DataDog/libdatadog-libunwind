@@ -29,6 +29,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
 #include <stdio.h>
 #include <sys/param.h>
 #include <limits.h>
+#include <stdint.h>
 
 #if HAVE_LZMA
 #include <lzma.h>
@@ -62,6 +63,45 @@ struct ip_range_callback_data
   Elf_W (Addr) *end_ip;
 };
 
+static int
+elf_w (image_contains) (const struct elf_image *ei, const void *ptr, size_t size)
+{
+  uintptr_t start = (uintptr_t) ei->image;
+  uintptr_t address = (uintptr_t) ptr;
+
+  if (ei->size > UINTPTR_MAX - start)
+    return 0;
+
+  uintptr_t end = start + ei->size;
+  return address >= start && address <= end && size <= end - address;
+}
+
+static int
+elf_w (valid_symbol_name) (const struct elf_image *ei, const char *strtab,
+                           Elf_W (Word) name_offset)
+{
+  if (!elf_w (image_contains) (ei, strtab, 1))
+    return 0;
+
+  size_t available = (uintptr_t) ei->image + ei->size - (uintptr_t) strtab;
+  return name_offset < available
+         && memchr (strtab + name_offset, '\0', available - name_offset) != NULL;
+}
+
+static void *
+elf_w (image_pointer) (const struct elf_image *ei, Elf_W (Addr) address,
+                       Elf_W (Addr) file_offset, size_t size)
+{
+  if (address < file_offset)
+    return NULL;
+
+  Elf_W (Addr) offset = address - file_offset;
+  if (offset > ei->size || size > ei->size - offset)
+    return NULL;
+
+  return (char *) ei->image + offset;
+}
+
 static Elf_W (Shdr)*
 elf_w (section_table) (const struct elf_image *ei)
 {
@@ -69,11 +109,14 @@ elf_w (section_table) (const struct elf_image *ei)
   Elf_W (Off) soff;
 
   soff = ehdr->e_shoff;
-  if (soff + ehdr->e_shnum * ehdr->e_shentsize > ei->size)
+  if (ehdr->e_shnum == 0)
+    return (Elf_W (Shdr) *) ei->image;
+
+  if (ehdr->e_shentsize < sizeof (Elf_W (Shdr))
+      || soff > ei->size
+      || ehdr->e_shnum > (ei->size - soff) / ehdr->e_shentsize)
     {
-      Debug (1, "section table outside of image? (%lu > %lu)\n",
-             (unsigned long) (soff + ehdr->e_shnum * ehdr->e_shentsize),
-             (unsigned long) ei->size);
+      Debug (1, "section table outside of image\n");
       return NULL;
     }
 
@@ -87,24 +130,24 @@ elf_w (string_table) (const struct elf_image *ei, int section)
   Elf_W (Off) soff, str_soff;
   Elf_W (Shdr) *str_shdr;
 
-  /* this offset is assumed to be OK */
   soff = ehdr->e_shoff;
 
-  str_soff = soff + (section * ehdr->e_shentsize);
-  if (str_soff + ehdr->e_shentsize > ei->size)
-    {
-      Debug (1, "string shdr table outside of image? (%lu > %lu)\n",
-             (unsigned long) (str_soff + ehdr->e_shentsize),
-             (unsigned long) ei->size);
-      return NULL;
-    }
+  if (section < 0 || section >= ehdr->e_shnum
+      || ehdr->e_shentsize < sizeof (Elf_W (Shdr))
+      || soff > ei->size
+      || (size_t) section > (ei->size - soff) / ehdr->e_shentsize)
+    return NULL;
+
+  str_soff = soff + ((size_t) section * ehdr->e_shentsize);
+  if (str_soff > ei->size || sizeof (*str_shdr) > ei->size - str_soff)
+    return NULL;
+
   str_shdr = (Elf_W (Shdr) *) ((char *) ei->image + str_soff);
 
-  if (str_shdr->sh_offset + str_shdr->sh_size > ei->size)
+  if (str_shdr->sh_offset > ei->size
+      || str_shdr->sh_size > ei->size - str_shdr->sh_offset)
     {
-      Debug (1, "string table outside of image? (%lu > %lu)\n",
-             (unsigned long) (str_shdr->sh_offset + str_shdr->sh_size),
-             (unsigned long) ei->size);
+      Debug (1, "string table outside of image\n");
       return NULL;
     }
 
@@ -126,15 +169,19 @@ elf_w (lookup_symbol_from_dynamic) (unw_addr_space_t as UNUSED,
   Elf_W (Ehdr) *ehdr = ei->image;
   Elf_W (Sym) *sym = NULL, *symtab = NULL;
   Elf_W (Phdr) *phdr;
-  Elf_W (Word) sym_num;
+  Elf_W (Word) sym_num = 0;
   Elf_W (Word) *hash = NULL, *gnu_hash = NULL;
   Elf_W (Addr) val;
   const char *strtab = NULL;
   int ret = -UNW_ENOINFO;
   size_t i;
-  Elf_W(Dyn) *dyn = NULL;
+  Elf_W (Dyn) *dyn = NULL, *dyn_end = NULL;
 
   phdr = (Elf_W (Phdr) *) ((char *) ei->image + ehdr->e_phoff);
+  if (!elf_w (image_contains) (ei, phdr,
+                               (size_t) ehdr->e_phnum * sizeof (*phdr)))
+    return -UNW_ENOINFO;
+
   for (i = 0; i < ehdr->e_phnum; ++i)
     if (phdr[i].p_type == PT_PHDR)
       {
@@ -142,62 +189,105 @@ elf_w (lookup_symbol_from_dynamic) (unw_addr_space_t as UNUSED,
       }
     else if (phdr[i].p_type == PT_DYNAMIC)
       {
-        dyn = (Elf_W (Dyn) *) ((char *)ei->image + phdr[i].p_offset);
+        dyn = (Elf_W (Dyn) *) ((char *) ei->image + phdr[i].p_offset);
+        if (phdr[i].p_filesz < sizeof (*dyn)
+            || !elf_w (image_contains) (ei, dyn, phdr[i].p_filesz))
+          return -UNW_ENOINFO;
+        dyn_end = (Elf_W (Dyn) *) ((char *) dyn + phdr[i].p_filesz);
         break;
       }
 
   if (!dyn)
     return -UNW_ENOINFO;
 
-  for (; dyn->d_tag != DT_NULL; ++dyn)
+  for (; dyn < dyn_end && dyn->d_tag != DT_NULL; ++dyn)
     {
       switch (dyn->d_tag)
         {
         case DT_SYMTAB:
-          symtab = (Elf_W (Sym) *) ((char *) ei->image + dyn->d_un.d_ptr - file_offset);
+          symtab = elf_w (image_pointer) (ei, dyn->d_un.d_ptr, file_offset,
+                                          sizeof (*symtab));
           break;
         case DT_STRTAB:
-          strtab = (const char *) ((char *) ei->image + dyn->d_un.d_ptr - file_offset);
+          strtab = elf_w (image_pointer) (ei, dyn->d_un.d_ptr, file_offset, 1);
           break;
         case DT_HASH:
-          hash = (Elf_W (Word) *) ((char *) ei->image + dyn->d_un.d_ptr - file_offset);
+          hash = elf_w (image_pointer) (ei, dyn->d_un.d_ptr, file_offset,
+                                        2 * sizeof (*hash));
           break;
         case DT_GNU_HASH:
-          gnu_hash = (Elf_W (Word) *) ((char *) ei->image + dyn->d_un.d_ptr - file_offset);
+          gnu_hash = elf_w (image_pointer) (ei, dyn->d_un.d_ptr, file_offset,
+                                            4 * sizeof (*gnu_hash));
           break;
         default:
           break;
         }
     }
 
-  if (!symtab || !strtab || (!hash && !gnu_hash))
-      return -UNW_ENOINFO;
+  if (dyn == dyn_end || !symtab || !strtab || (!hash && !gnu_hash))
+    return -UNW_ENOINFO;
 
   if (gnu_hash)
     {
-        uint32_t *buckets = gnu_hash + 4 + (gnu_hash[2] * sizeof(size_t)/4);
-        uint32_t *hashval;
-        for (i = sym_num = 0; i < gnu_hash[0]; i++)
-          if (buckets[i] > sym_num)
-            sym_num = buckets[i];
+      uint32_t nbuckets = gnu_hash[0];
+      uint32_t symoffset = gnu_hash[1];
+      uint32_t bloom_size = gnu_hash[2];
+      size_t bloom_words, buckets_available, chain_index;
+      uint32_t *buckets, *hashval;
+      uintptr_t image_end = (uintptr_t) ei->image + ei->size;
 
-        if (sym_num)
-          {
-            hashval = buckets + gnu_hash[0] + (sym_num - gnu_hash[1]);
-            do sym_num++;
-            while (!(*hashval++ & 1));
-          }
+      if (nbuckets == 0 || bloom_size == 0
+          || bloom_size > SIZE_MAX / (sizeof (size_t) / sizeof (*gnu_hash)))
+        return -UNW_ENOINFO;
+
+      bloom_words = (size_t) bloom_size * sizeof (size_t) / sizeof (*gnu_hash);
+      if (bloom_words > (image_end - (uintptr_t) gnu_hash) / sizeof (*gnu_hash) - 4)
+        return -UNW_ENOINFO;
+
+      buckets = (uint32_t *) (gnu_hash + 4 + bloom_words);
+      buckets_available = (image_end - (uintptr_t) buckets) / sizeof (*buckets);
+      if (nbuckets > buckets_available)
+        return -UNW_ENOINFO;
+
+      for (i = 0; i < nbuckets; ++i)
+        if (buckets[i] > sym_num)
+          sym_num = buckets[i];
+
+      if (sym_num)
+        {
+          if (sym_num < symoffset)
+            return -UNW_ENOINFO;
+          chain_index = (size_t) sym_num - symoffset;
+          if (chain_index >= buckets_available - nbuckets)
+            return -UNW_ENOINFO;
+
+          hashval = buckets + nbuckets + chain_index;
+          do
+            {
+              if ((size_t) (hashval - buckets) >= buckets_available
+                  || sym_num == UINT32_MAX)
+                return -UNW_ENOINFO;
+              ++sym_num;
+            }
+          while (!(*hashval++ & 1));
+        }
     }
   else
     {
       sym_num = hash[1];
     }
 
+  if (sym_num > ei->size / sizeof (*symtab)
+      || !elf_w (image_contains) (ei, symtab,
+                                  (size_t) sym_num * sizeof (*symtab)))
+    return -UNW_ENOINFO;
+
   for (i = 0; i < sym_num; ++i)
     {
       sym = &symtab[i];
       if (ELF_W (ST_TYPE) (sym->st_info) == STT_FUNC
-          && sym->st_shndx != SHN_UNDEF)
+          && sym->st_shndx != SHN_UNDEF
+          && elf_w (valid_symbol_name) (ei, strtab, sym->st_name))
         {
           val = sym->st_value;
           if (sym->st_shndx != SHN_ABS)
@@ -207,7 +297,6 @@ elf_w (lookup_symbol_from_dynamic) (unw_addr_space_t as UNUSED,
           Debug (16, "0x%016lx info=0x%02x %s\n",
                  (long) val, sym->st_info, strtab + sym->st_name);
 
-          /* as long as found one, the return will be success*/
           struct symbol_info syminfo =
             {
               .strtab = strtab,
@@ -215,10 +304,7 @@ elf_w (lookup_symbol_from_dynamic) (unw_addr_space_t as UNUSED,
               .start_ip = val
             };
           if ((*callback) (context, &syminfo, data) == UNW_ESUCCESS)
-            {
-              if (ret != UNW_ESUCCESS)
-                ret = UNW_ESUCCESS;
-            }
+            ret = UNW_ESUCCESS;
         }
     }
 
@@ -255,9 +341,15 @@ elf_w (lookup_symbol_closeness) (unw_addr_space_t as UNUSED,
         {
         case SHT_SYMTAB:
         case SHT_DYNSYM:
+          syment_size = shdr->sh_entsize;
+          if (syment_size < sizeof (Elf_W (Sym))
+              || shdr->sh_offset > ei->size
+              || shdr->sh_size > ei->size - shdr->sh_offset
+              || shdr->sh_size % syment_size != 0)
+            break;
+
           symtab = (Elf_W (Sym) *) ((char *) ei->image + shdr->sh_offset);
           symtab_end = (Elf_W (Sym) *) ((char *) symtab + shdr->sh_size);
-          syment_size = shdr->sh_entsize;
 
           strtab = elf_w (string_table) (ei, shdr->sh_link);
           if (!strtab)
@@ -271,7 +363,8 @@ elf_w (lookup_symbol_closeness) (unw_addr_space_t as UNUSED,
                sym = (Elf_W (Sym) *) ((char *) sym + syment_size))
             {
               if (ELF_W (ST_TYPE) (sym->st_info) == STT_FUNC
-                  && sym->st_shndx != SHN_UNDEF)
+                  && sym->st_shndx != SHN_UNDEF
+                  && elf_w (valid_symbol_name) (ei, strtab, sym->st_name))
                 {
                   val = sym->st_value;
                   if (sym->st_shndx != SHN_ABS)
@@ -421,6 +514,9 @@ elf_w (get_load_offset) (struct elf_image *ei, unsigned long segbase)
 
   ehdr = ei->image;
   phdr = (Elf_W (Phdr) *) ((char *) ei->image + ehdr->e_phoff);
+  if (!elf_w (image_contains) (ei, phdr,
+                               (size_t) ehdr->e_phnum * sizeof (*phdr)))
+    return 0;
 
   for (i = 0; i < ehdr->e_phnum; ++i)
     if (phdr[i].p_type == PT_LOAD && phdr[i].p_flags & PF_X)
